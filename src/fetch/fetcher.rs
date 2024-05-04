@@ -125,7 +125,6 @@ impl Fetcher {
                     match body_result {
                         Ok(body_str) => {
                             let parse_result = entry_from_json(body_str.as_str(), etag, Utc::now());
-                            println!("{}", body_str);
                             match parse_result {
                                 Ok(entry) => Fetched(entry),
                                 Err(parse_error) => {

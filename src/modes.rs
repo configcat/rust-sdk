@@ -5,3 +5,13 @@ pub enum PollingMode {
     LazyLoad(Duration),
     Manual,
 }
+
+impl PollingMode {
+    pub fn mode_identifier(&self) -> &str {
+        match self {
+            PollingMode::AutoPoll(_) => "a",
+            PollingMode::LazyLoad(_) => "l",
+            PollingMode::Manual => "m",
+        }
+    }
+}

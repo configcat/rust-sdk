@@ -6,7 +6,7 @@ pub enum DataGovernance {
     /// Select this if your feature flags are published to all global CDN nodes.
     Global,
     /// Select this if your feature flags are published to CDN nodes only in the EU.
-    EU,
+    Eu,
 }
 
 #[derive(Debug, Deserialize_repr, PartialEq, Clone)]
