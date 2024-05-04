@@ -1,0 +1,16 @@
+name: Rust SDK Publish
+on:
+  push:
+    tags: [ '[0-9]+.[0-9]+.[0-9]+' ]
+
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Publish
+        run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
