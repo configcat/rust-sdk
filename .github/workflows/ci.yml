@@ -53,32 +53,6 @@ jobs:
       - name: Run Clippy
         run: cargo clippy
 
-  sonar:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: clippy
-          rustflags: ""
-      - name: Install cargo-sonar and run Clippy
-        run: |
-            cargo install cargo-sonar
-            cargo clippy --message-format json > clippy-report.json
-            cargo sonar --clippy --clippy-path clippy-report.json
-      - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
   publish-dry-run:
     needs: [test, format, sonar]
     runs-on: ubuntu-latest
