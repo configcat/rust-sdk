@@ -43,7 +43,7 @@ impl Options {
         &self.http_timeout
     }
 
-    pub fn cache(&self) -> &(dyn ConfigCache) {
+    pub fn cache(&self) -> &dyn ConfigCache {
         self.cache.borrow()
     }
 

@@ -1,3 +1,4 @@
+use crate::errors::ClientError;
 use crate::model::enums::{
     PrerequisiteFlagComparator, RedirectMode, SegmentComparator, SettingType, UserComparator,
 };
@@ -5,13 +6,6 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use thiserror::Error;
-
-#[derive(Error, PartialEq, Debug)]
-pub enum Error {
-    #[error("JSON parsing failed. ({0})")]
-    Parse(String),
-}
 
 #[derive(Debug, Clone)]
 pub struct ConfigEntry {
@@ -65,7 +59,7 @@ pub fn entry_from_json(
     json: &str,
     etag: &str,
     fetch_time: DateTime<Utc>,
-) -> Result<ConfigEntry, Error> {
+) -> Result<ConfigEntry, ClientError> {
     match serde_json::from_str::<Config>(json) {
         Ok(config) => Ok(ConfigEntry {
             config: Arc::new(config),
@@ -73,15 +67,15 @@ pub fn entry_from_json(
             fetch_time,
             config_json: json.to_string(),
         }),
-        Err(err) => Err(Error::Parse(err.to_string())),
+        Err(err) => Err(ClientError::Parse(err.to_string())),
     }
 }
 
-pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
+pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, ClientError> {
     let time_index = if let Some(time_index) = cached_json.find('\n') {
         time_index
     } else {
-        return Err(Error::Parse(
+        return Err(ClientError::Parse(
             "Number of values is fewer than expected".to_string(),
         ));
     };
@@ -89,7 +83,7 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
     let etag_index = if let Some(etag_index) = without_time.find('\n') {
         etag_index
     } else {
-        return Err(Error::Parse(
+        return Err(ClientError::Parse(
             "Number of values is fewer than expected".to_string(),
         ));
     };
@@ -97,12 +91,14 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
     let time = if let Ok(time) = time_string.parse::<i64>() {
         time
     } else {
-        return Err(Error::Parse(format!("Invalid fetch time: '{time_string}'")));
+        return Err(ClientError::Parse(format!(
+            "Invalid fetch time: '{time_string}'"
+        )));
     };
     let fetch_time = if let Some(fetch_time) = DateTime::from_timestamp_millis(time) {
         fetch_time
     } else {
-        return Err(Error::Parse(format!(
+        return Err(ClientError::Parse(format!(
             "Invalid unix seconds value: '{time}'"
         )));
     };

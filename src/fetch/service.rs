@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 use crate::constants::{
     CONFIG_FILE_NAME, EU_CDN_URL, GLOBAL_CDN_URL, SERIALIZATION_FORMAT_VERSION,
 };
+use crate::errors::ClientError;
 use crate::fetch::fetcher::{FetchResponse, Fetcher};
 use crate::model::config::{entry_from_cached_json, Config, ConfigEntry};
 use crate::model::enums::DataGovernance;
@@ -18,7 +19,7 @@ use crate::utils::sha1;
 
 pub enum ServiceResult {
     Ok(Arc<Config>),
-    Failed(String, Arc<Config>),
+    Failed(ClientError, Arc<Config>),
 }
 
 impl ServiceResult {
@@ -83,31 +84,30 @@ impl ConfigService {
             cancellation_token: CancellationToken::new(),
             close: Once::new(),
         };
-
         match opts.polling_mode() {
             PollingMode::AutoPoll(interval) if !opts.offline() => service.start_poll(*interval),
             _ => service.state.initialized(),
         }
-
         service
     }
 
     pub async fn get_config(&self) -> ServiceResult {
+        let initialized = self.state.initialized.load(Ordering::SeqCst);
         let threshold = match self.options.polling_mode() {
             PollingMode::LazyLoad(cache_ttl) => Utc::now() - *cache_ttl,
+            PollingMode::AutoPoll(interval) if !initialized => Utc::now() - *interval,
             _ => DateTime::<Utc>::MIN_UTC,
         };
         let prefer_cached = match self.options.polling_mode() {
             PollingMode::LazyLoad(_) => false,
-            _ => self.state.initialized.load(Ordering::SeqCst),
+            _ => initialized,
         };
-
         fetch_if_older(&self.state, &self.options, threshold, prefer_cached).await
     }
 
-    pub async fn refresh(&self) -> Result<(), String> {
+    pub async fn refresh(&self) -> Result<(), ClientError> {
         let result =
-            fetch_if_older(&self.state, &self.options, DateTime::<Utc>::MIN_UTC, false).await;
+            fetch_if_older(&self.state, &self.options, DateTime::<Utc>::MAX_UTC, false).await;
         match result {
             ServiceResult::Ok(_) => Ok(()),
             ServiceResult::Failed(err, _) => Err(err),
@@ -157,6 +157,10 @@ async fn fetch_if_older(
     }
 
     if entry.fetch_time > threshold || state.offline.load(Ordering::SeqCst) || prefer_cached {
+        println!(
+            "{fetch_time} - {threshold} - {prefer_cached}",
+            fetch_time = entry.fetch_time
+        );
         state.initialized();
         return ServiceResult::Ok(entry.config.clone());
     }
@@ -211,13 +215,14 @@ fn read_cache(
 
 #[cfg(test)]
 mod service_tests {
+    use crate::cache::EmptyConfigCache;
+    use crate::ConfigCache;
+    use chrono::{DateTime, Utc};
     use mockito::{Mock, ServerGuard};
     use reqwest::header::{ETAG, IF_NONE_MATCH};
-    use std::sync::Arc;
-    use std::task::Poll;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use crate::cache::EmptyConfigCache;
     use crate::constants::test_constants::{MOCK_KEY, MOCK_PATH};
     use crate::fetch::service::ConfigService;
     use crate::modes::PollingMode;
@@ -258,35 +263,14 @@ mod service_tests {
     }
 
     #[tokio::test]
-    async fn get_config() {
-        let mut server = mockito::Server::new_async().await;
-        server
-            .mock("GET", MOCK_PATH)
-            .with_status(200)
-            .with_body(r#"{"f": {"testKey":{"t":1,"v":{"s": "testValue"}}}, "s": []}"#)
-            .create_async()
-            .await;
-
-        let opts = Arc::new(
-            OptionsBuilder::new(MOCK_KEY)
-                .base_url(server.url().as_str())
-                .cache(Box::new(EmptyConfigCache::new()))
-                .build()
-                .unwrap(),
-        );
-        let service = ConfigService::new(&opts);
-        let result = service.get_config().await;
-        assert_eq!(result.config().settings.len(), 1);
-    }
-
-    #[tokio::test]
     async fn auto_poll() {
         let mut server = mockito::Server::new_async().await;
-        let (m1, m2, m3) = create_success_mock(&mut server).await;
+        let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
         let opts = create_options(
             server.url(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
+            None,
         );
         let service = ConfigService::new(&opts);
 
@@ -308,11 +292,12 @@ mod service_tests {
     #[tokio::test]
     async fn auto_poll_failed() {
         let mut server = mockito::Server::new_async().await;
-        let (m1, m2) = create_failure_mock(&mut server).await;
+        let (m1, m2) = create_success_then_failure_mock(&mut server).await;
 
         let opts = create_options(
             server.url(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
+            None,
         );
         let service = ConfigService::new(&opts);
 
@@ -333,11 +318,12 @@ mod service_tests {
     #[tokio::test]
     async fn lazy_load() {
         let mut server = mockito::Server::new_async().await;
-        let (m1, m2, m3) = create_success_mock(&mut server).await;
+        let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
         let opts = create_options(
             server.url(),
             PollingMode::LazyLoad(Duration::from_millis(100)),
+            None,
         );
         let service = ConfigService::new(&opts);
 
@@ -366,9 +352,114 @@ mod service_tests {
         m3.assert_async().await;
     }
 
-    fn create_options(url: String, mode: PollingMode) -> Arc<Options> {
+    #[tokio::test]
+    async fn lazy_load_failed() {
+        let mut server = mockito::Server::new_async().await;
+        let (m1, m2) = create_success_then_failure_mock(&mut server).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::LazyLoad(Duration::from_millis(100)),
+            None,
+        );
+        let service = ConfigService::new(&opts);
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        m1.assert_async().await;
+        m2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn manual_poll() {
+        let mut server = mockito::Server::new_async().await;
+        let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
+
+        let opts = create_options(server.url(), PollingMode::Manual, None);
+        let service = ConfigService::new(&opts);
+
+        let result = service.get_config().await;
+        assert!(result.config().settings.is_empty());
+
+        _ = service.refresh().await;
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        _ = service.refresh().await;
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+
+        _ = service.refresh().await;
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+
+        m1.assert_async().await;
+        m2.assert_async().await;
+        m3.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn fail_http_reload_from_cache() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_failure_mock(&mut server, 1).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            Some(Box::new(SingleValueCache::new(construct_cache_payload(
+                "test1",
+                Utc::now() - Duration::from_secs(1),
+                "etag1",
+            )))),
+        );
+        let service = ConfigService::new(&opts);
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        opts.cache().write(
+            service.state.clone().cache_key.as_str(),
+            construct_cache_payload("test2", Utc::now(), "etag2").as_str(),
+        );
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+
+        m.assert_async().await;
+    }
+
+    fn create_options(
+        url: String,
+        mode: PollingMode,
+        cache: Option<Box<dyn ConfigCache>>,
+    ) -> Arc<Options> {
         Arc::new(
             OptionsBuilder::new(MOCK_KEY)
+                .cache(cache.unwrap_or(Box::new(EmptyConfigCache::new())))
                 .base_url(url.as_str())
                 .polling_mode(mode)
                 .build()
@@ -376,21 +467,14 @@ mod service_tests {
         )
     }
 
-    async fn create_success_mock(server: &mut ServerGuard) -> (Mock, Mock, Mock) {
-        let m1 = server
-            .mock("GET", MOCK_PATH)
-            .with_status(200)
-            .with_body(r#"{"f": {"testKey":{"t":1,"v":{"s": "test1"}}}, "s": []}"#)
-            .with_header(ETAG.as_str(), "etag1")
-            .expect(1)
-            .create_async()
-            .await;
+    async fn create_success_mock_sequence(server: &mut ServerGuard) -> (Mock, Mock, Mock) {
+        let m1 = create_success_mock(server, 1).await;
 
         let m2 = server
             .mock("GET", MOCK_PATH)
             .match_header(IF_NONE_MATCH.as_str(), "etag1")
             .with_status(200)
-            .with_body(r#"{"f": {"testKey":{"t":1,"v":{"s": "test2"}}}, "s": []}"#)
+            .with_body(construct_json_payload("test2"))
             .with_header(ETAG.as_str(), "etag2")
             .expect(1)
             .create_async()
@@ -408,24 +492,61 @@ mod service_tests {
         (m1, m2, m3)
     }
 
-    async fn create_failure_mock(server: &mut ServerGuard) -> (Mock, Mock) {
-        let m1 = server
+    async fn create_success_then_failure_mock(server: &mut ServerGuard) -> (Mock, Mock) {
+        let m1 = create_success_mock(server, 1).await;
+        let m2 = create_failure_mock(server, 1).await;
+        (m1, m2)
+    }
+
+    async fn create_success_mock(server: &mut ServerGuard, expect: usize) -> Mock {
+        server
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(r#"{"f": {"testKey":{"t":1,"v":{"s": "test1"}}}, "s": []}"#)
+            .with_body(construct_json_payload("test1"))
             .with_header(ETAG.as_str(), "etag1")
-            .expect(1)
+            .expect(expect)
             .create_async()
-            .await;
+            .await
+    }
 
-        let m2 = server
+    async fn create_failure_mock(server: &mut ServerGuard, expect: usize) -> Mock {
+        server
             .mock("GET", MOCK_PATH)
             .match_header(IF_NONE_MATCH.as_str(), "etag1")
             .with_status(502)
-            .expect_at_least(1)
+            .expect_at_least(expect)
             .create_async()
-            .await;
+            .await
+    }
 
-        (m1, m2)
+    fn construct_cache_payload(val: &str, time: DateTime<Utc>, etag: &str) -> String {
+        time.timestamp_millis().to_string() + "\n" + etag + "\n" + &construct_json_payload(val)
+    }
+
+    fn construct_json_payload(val: &str) -> String {
+        format!(r#"{{"f": {{"testKey":{{"t":1,"v":{{"s": "{val}"}}}}}}, "s": []}}"#)
+    }
+
+    struct SingleValueCache {
+        pub val: Mutex<String>,
+    }
+
+    impl SingleValueCache {
+        fn new(val: String) -> Self {
+            Self {
+                val: Mutex::new(val),
+            }
+        }
+    }
+
+    impl ConfigCache for SingleValueCache {
+        fn read(&self, _: &str) -> Option<String> {
+            Some(self.val.lock().unwrap().clone())
+        }
+
+        fn write(&self, _: &str, value: &str) {
+            let mut val = self.val.lock().unwrap();
+            *val = value.to_string()
+        }
     }
 }

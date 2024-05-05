@@ -5,6 +5,7 @@ use chrono::Utc;
 use reqwest::header::{HeaderMap, ETAG, IF_NONE_MATCH};
 
 use crate::constants::{CONFIG_FILE_NAME, PKG_VERSION, SDK_KEY_PROXY_PREFIX};
+use crate::errors::ClientError;
 use crate::fetch::fetcher::FetchResponse::{Failed, Fetched, NotModified};
 use crate::model::config::{entry_from_json, ConfigEntry};
 use crate::model::enums::RedirectMode;
@@ -15,7 +16,7 @@ const CONFIGCAT_UA_HEADER: &str = "X-ConfigCat-UserAgent";
 pub enum FetchResponse {
     Fetched(ConfigEntry),
     NotModified,
-    Failed(String, bool),
+    Failed(ClientError, bool),
 }
 
 impl FetchResponse {
@@ -85,7 +86,7 @@ impl Fetcher {
                         if redirect == RedirectMode::No {
                             return response;
                         } else if redirect == RedirectMode::Should {
-                            log_warn!(event_id: 3002, "The `builder.dataGovernance()` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard. Read more: https://configcat.com/docs/advanced/data-governance")
+                            log_warn!(event_id: 3002, "The `.data_governance()` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard. Read more: https://configcat.com/docs/advanced/data-governance")
                         }
                     }
                     _ => return response,
@@ -95,7 +96,7 @@ impl Fetcher {
         }
         let msg = "Redirection loop encountered while trying to fetch config JSON. Please contact us at https://configcat.com/support".to_string();
         log_err!(event_id: 1104, "{}", msg);
-        Failed(msg, true)
+        Failed(ClientError::Http(1104, msg), true)
     }
 
     async fn fetch_http(&self, url: &str, etag: &str) -> FetchResponse {
@@ -130,14 +131,14 @@ impl Fetcher {
                                 Err(parse_error) => {
                                     let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {parse_error}");
                                     log_err!(event_id: 1105, "{}", msg);
-                                    Failed(msg, true)
+                                    Failed(ClientError::Http(1105, msg), true)
                                 }
                             }
                         }
                         Err(body_error) => {
                             let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {body_error}");
                             log_err!(event_id: 1105, "{}", msg);
-                            Failed(msg, true)
+                            Failed(ClientError::Http(1105, msg), true)
                         }
                     }
                 }
@@ -148,23 +149,23 @@ impl Fetcher {
                 code @ 404 | code @ 403 => {
                     let msg = format!("Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: {code}");
                     log_err!(event_id: 1100, "{}", msg);
-                    Failed(msg, false)
+                    Failed(ClientError::Http(1100, msg), false)
                 }
                 code => {
                     let msg = format!("Unexpected HTTP response was received while trying to fetch config JSON. Status code: {code}");
                     log_err!(event_id: 1101, "{}", msg);
-                    Failed(msg, true)
+                    Failed(ClientError::Http(1101, msg), true)
                 }
             },
             Err(error) => {
                 if error.is_timeout() {
                     let msg = "Request timed out while trying to fetch config JSON.".to_string();
                     log_err!(event_id: 1102, "{}", msg);
-                    Failed(msg, true)
+                    Failed(ClientError::Http(1102, msg), true)
                 } else {
                     let msg = format!("Unexpected error occurred while trying to fetch config JSON. It is most likely due to a local network issue. Please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP. {error}");
                     log_err!(event_id: 1103, "{}", msg);
-                    Failed(msg, true)
+                    Failed(ClientError::Http(1103, msg), true)
                 }
             }
         }
@@ -276,7 +277,7 @@ mod fetch_tests {
         match response {
             FetchResponse::Failed(err, transient) => {
                 assert!(!transient);
-                assert_eq!(err, "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 404");
+                assert_eq!(format!("{err}").as_str(), "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 404");
             }
             _ => panic!(),
         }
@@ -285,7 +286,7 @@ mod fetch_tests {
         match response {
             FetchResponse::Failed(err, transient) => {
                 assert!(!transient);
-                assert_eq!(err, "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 403");
+                assert_eq!(format!("{err}").as_str(), "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 403");
             }
             _ => panic!(),
         }
@@ -294,7 +295,7 @@ mod fetch_tests {
         match response {
             FetchResponse::Failed(err, transient) => {
                 assert!(transient);
-                assert_eq!(err, "Unexpected HTTP response was received while trying to fetch config JSON. Status code: 500");
+                assert_eq!(format!("{err}").as_str(), "Unexpected HTTP response was received while trying to fetch config JSON. Status code: 500");
             }
             _ => panic!(),
         }
@@ -321,7 +322,7 @@ mod fetch_tests {
         match response {
             FetchResponse::Failed(err, transient) => {
                 assert!(transient);
-                assert_eq!(err, "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing an object at line 1 column 8)");
+                assert_eq!(format!("{err}").as_str(), "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing an object at line 1 column 8)");
             }
             _ => panic!(),
         }
@@ -330,7 +331,7 @@ mod fetch_tests {
         match response {
             FetchResponse::Failed(err, transient) => {
                 assert!(transient);
-                assert_eq!(err, "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing a value at line 1 column 0)");
+                assert_eq!(format!("{err}").as_str(), "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing a value at line 1 column 0)");
             }
             _ => panic!(),
         }
