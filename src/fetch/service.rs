@@ -221,6 +221,7 @@ mod service_tests {
 
     use crate::constants::test_constants::{MOCK_KEY, MOCK_PATH};
     use crate::fetch::service::ConfigService;
+    use crate::model::config::entry_from_cached_json;
     use crate::modes::PollingMode;
     use crate::options::{Options, OptionsBuilder};
 
@@ -448,6 +449,91 @@ mod service_tests {
         m.assert_async().await;
     }
 
+    #[tokio::test]
+    async fn poll_respects_cache_expiration() {
+        let mut server = mockito::Server::new_async().await;
+        let m1 = create_success_mock_with_etag(&mut server, "etag1", 0).await;
+        let m2 = create_success_mock_with_etag(&mut server, "etag2", 0).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            Some(Box::new(SingleValueCache::new(construct_cache_payload(
+                "test1",
+                Utc::now(),
+                "etag1",
+            )))),
+        );
+        let service = ConfigService::new(&opts);
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        opts.cache().write(
+            service.state.clone().cache_key.as_str(),
+            construct_cache_payload("test2", Utc::now(), "etag2").as_str(),
+        );
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+
+        m1.assert_async().await;
+        m2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn poll_cache_write() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_success_mock(&mut server, 1).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            Some(Box::new(SingleValueCache::new(String::default()))),
+        );
+        let service = ConfigService::new(&opts);
+
+        let result = service.get_config().await;
+        let setting = &result.config().settings["testKey"];
+        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+
+        let cached = opts.cache().read("").unwrap();
+        let entry = entry_from_cached_json(cached.as_str()).unwrap();
+
+        assert_eq!(entry.etag, "etag1");
+        assert_eq!(
+            entry.config_json,
+            r#"{"f": {"testKey":{"t":1,"v":{"s": "test1"}}}, "s": []}"#
+        );
+
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn offline() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_success_mock(&mut server, 0).await;
+
+        let opts = Arc::new(
+            OptionsBuilder::new(MOCK_KEY)
+                .base_url(server.url().as_str())
+                .polling_mode(PollingMode::AutoPoll(Duration::from_millis(100)))
+                .offline(true)
+                .build()
+                .unwrap(),
+        );
+        let service = ConfigService::new(&opts);
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let result = service.get_config().await;
+        assert!(result.config().settings.is_empty());
+
+        m.assert_async().await;
+    }
+
     fn create_options(
         url: String,
         mode: PollingMode,
@@ -500,6 +586,22 @@ mod service_tests {
             .with_status(200)
             .with_body(construct_json_payload("test1"))
             .with_header(ETAG.as_str(), "etag1")
+            .expect(expect)
+            .create_async()
+            .await
+    }
+
+    async fn create_success_mock_with_etag(
+        server: &mut ServerGuard,
+        etag: &str,
+        expect: usize,
+    ) -> Mock {
+        server
+            .mock("GET", MOCK_PATH)
+            .match_header(IF_NONE_MATCH.as_str(), etag)
+            .with_status(200)
+            .with_body(construct_json_payload("test1"))
+            .with_header(ETAG.as_str(), etag)
             .expect(expect)
             .create_async()
             .await
