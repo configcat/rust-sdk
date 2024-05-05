@@ -157,10 +157,6 @@ async fn fetch_if_older(
     }
 
     if entry.fetch_time > threshold || state.offline.load(Ordering::SeqCst) || prefer_cached {
-        println!(
-            "{fetch_time} - {threshold} - {prefer_cached}",
-            fetch_time = entry.fetch_time
-        );
         state.initialized();
         return ServiceResult::Ok(entry.config.clone());
     }
