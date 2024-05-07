@@ -25,6 +25,7 @@ tokio-util = "0.7"
 lazy_static = "1.4"
 sha1 = "0.10"
 base16ct = { version = "0.2", features = ["alloc"] }
+semver = "1.0"
 
 [build-dependencies]
 built = "0.7"

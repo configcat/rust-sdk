@@ -6,7 +6,7 @@ pub enum DataGovernance {
     /// Select this if your feature flags are published to all global CDN nodes.
     Global,
     /// Select this if your feature flags are published to CDN nodes only in the EU.
-    Eu,
+    EU,
 }
 
 #[derive(Debug, Deserialize_repr, PartialEq, Clone)]
@@ -17,6 +17,7 @@ pub enum RedirectMode {
     Force,
 }
 
+/// The type of a feature flag or setting.
 #[derive(Debug, Clone, Deserialize_repr)]
 #[repr(u8)]
 pub enum SettingType {
@@ -30,6 +31,7 @@ pub enum SettingType {
     Double = 3,
 }
 
+/// Segment comparison operator used during the evaluation process.
 #[derive(Debug, Clone, Deserialize_repr)]
 #[repr(u8)]
 pub enum SegmentComparator {
@@ -39,6 +41,7 @@ pub enum SegmentComparator {
     IsNotIn = 1,
 }
 
+/// Prerequisite flag comparison operator used during the evaluation process.
 #[derive(Debug, Clone, Deserialize_repr)]
 #[repr(u8)]
 pub enum PrerequisiteFlagComparator {
@@ -48,6 +51,7 @@ pub enum PrerequisiteFlagComparator {
     NotEq = 1,
 }
 
+/// User Object attribute comparison operator used during the evaluation process.
 #[derive(Debug, Clone, Deserialize_repr)]
 #[repr(u8)]
 pub enum UserComparator {

@@ -1,4 +1,5 @@
-use crate::options::{Options, OptionsBuilder, OptionsError};
+use crate::options::{Options, OptionsBuilder};
+use crate::ClientError;
 use std::sync::Arc;
 
 pub struct Client {
@@ -6,7 +7,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn from_builder(builder: OptionsBuilder) -> Result<Self, OptionsError> {
+    pub fn from_builder(builder: OptionsBuilder) -> Result<Self, ClientError> {
         let result = builder.build();
         match result {
             Ok(opts) => Ok(Client::new(opts)),
@@ -18,5 +19,9 @@ impl Client {
         Self {
             options: Arc::new(options),
         }
+    }
+
+    pub fn refresh() -> Result<(), ClientError> {
+        Ok(())
     }
 }

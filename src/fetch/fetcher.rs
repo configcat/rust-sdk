@@ -5,7 +5,7 @@ use chrono::Utc;
 use reqwest::header::{HeaderMap, ETAG, IF_NONE_MATCH};
 
 use crate::constants::{CONFIG_FILE_NAME, PKG_VERSION, SDK_KEY_PROXY_PREFIX};
-use crate::errors::ClientError;
+use crate::errors::InternalError;
 use crate::fetch::fetcher::FetchResponse::{Failed, Fetched, NotModified};
 use crate::model::config::{entry_from_json, ConfigEntry};
 use crate::model::enums::RedirectMode;
@@ -16,7 +16,7 @@ const CONFIGCAT_UA_HEADER: &str = "X-ConfigCat-UserAgent";
 pub enum FetchResponse {
     Fetched(ConfigEntry),
     NotModified,
-    Failed(ClientError, bool),
+    Failed(InternalError, bool),
 }
 
 impl FetchResponse {
@@ -45,7 +45,7 @@ impl Fetcher {
                 .unwrap(),
         );
         Self {
-            sdk_key: sdk_key.to_string(),
+            sdk_key: sdk_key.to_owned(),
             fetch_url: Arc::new(Mutex::new(url)),
             is_custom_url: is_custom,
             http_client: reqwest::Client::builder()
@@ -94,9 +94,9 @@ impl Fetcher {
                 _ => return response,
             }
         }
-        let msg = "Redirection loop encountered while trying to fetch config JSON. Please contact us at https://configcat.com/support".to_string();
+        let msg = "Redirection loop encountered while trying to fetch config JSON. Please contact us at https://configcat.com/support".to_owned();
         log_err!(event_id: 1104, "{}", msg);
-        Failed(ClientError::Http(1104, msg), true)
+        Failed(InternalError::Http(msg), true)
     }
 
     async fn fetch_http(&self, url: &str, etag: &str) -> FetchResponse {
@@ -107,7 +107,7 @@ impl Fetcher {
         );
         let mut builder = self.http_client.get(final_url);
         if !etag.is_empty() {
-            builder = builder.header(IF_NONE_MATCH, etag.to_string());
+            builder = builder.header(IF_NONE_MATCH, etag.to_owned());
         }
 
         let result = builder.send().await;
@@ -131,14 +131,14 @@ impl Fetcher {
                                 Err(parse_error) => {
                                     let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {parse_error}");
                                     log_err!(event_id: 1105, "{}", msg);
-                                    Failed(ClientError::Http(1105, msg), true)
+                                    Failed(InternalError::Http(msg), true)
                                 }
                             }
                         }
                         Err(body_error) => {
                             let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {body_error}");
                             log_err!(event_id: 1105, "{}", msg);
-                            Failed(ClientError::Http(1105, msg), true)
+                            Failed(InternalError::Http(msg), true)
                         }
                     }
                 }
@@ -149,23 +149,23 @@ impl Fetcher {
                 code @ 404 | code @ 403 => {
                     let msg = format!("Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: {code}");
                     log_err!(event_id: 1100, "{}", msg);
-                    Failed(ClientError::Http(1100, msg), false)
+                    Failed(InternalError::Http(msg), false)
                 }
                 code => {
                     let msg = format!("Unexpected HTTP response was received while trying to fetch config JSON. Status code: {code}");
                     log_err!(event_id: 1101, "{}", msg);
-                    Failed(ClientError::Http(1101, msg), true)
+                    Failed(InternalError::Http(msg), true)
                 }
             },
             Err(error) => {
                 if error.is_timeout() {
-                    let msg = "Request timed out while trying to fetch config JSON.".to_string();
+                    let msg = "Request timed out while trying to fetch config JSON.".to_owned();
                     log_err!(event_id: 1102, "{}", msg);
-                    Failed(ClientError::Http(1102, msg), true)
+                    Failed(InternalError::Http(msg), true)
                 } else {
                     let msg = format!("Unexpected error occurred while trying to fetch config JSON. It is most likely due to a local network issue. Please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP. {error}");
                     log_err!(event_id: 1103, "{}", msg);
-                    Failed(ClientError::Http(1103, msg), true)
+                    Failed(InternalError::Http(msg), true)
                 }
             }
         }
@@ -173,7 +173,7 @@ impl Fetcher {
 
     fn fetch_url(&self) -> String {
         let url = self.fetch_url.lock().unwrap();
-        url.to_string()
+        url.to_owned()
     }
 
     fn set_fetch_url(&self, new_url: String) {
@@ -572,7 +572,7 @@ mod data_governance_tests {
     }
 
     fn format_body(url: String, redirect_mode: u8) -> String {
-        return "{ \"p\": { \"u\": \"".to_string()
+        return "{ \"p\": { \"u\": \"".to_owned()
             + url.as_str()
             + "\", \"r\": "
             + redirect_mode.to_string().as_str()

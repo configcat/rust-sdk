@@ -18,15 +18,15 @@ use crate::options::Options;
 use crate::utils::sha1;
 
 pub enum ServiceResult {
-    Ok(Arc<Config>),
-    Failed(ClientError, Arc<Config>),
+    Ok(Arc<Config>, DateTime<Utc>),
+    Failed(ClientError, Arc<Config>, DateTime<Utc>),
 }
 
 impl ServiceResult {
     pub fn config(&self) -> &Arc<Config> {
         match self {
-            ServiceResult::Ok(entry) => entry,
-            ServiceResult::Failed(_, entry) => entry,
+            ServiceResult::Ok(entry, _) => entry,
+            ServiceResult::Failed(_, entry, _) => entry,
         }
     }
 }
@@ -63,13 +63,12 @@ impl ConfigService {
                     sdk_key = opts.sdk_key()
                 )),
                 fetcher: Fetcher::new(
-                    opts.base_url().clone().unwrap_or_else(|| {
-                        if *opts.data_governance() == DataGovernance::Global {
-                            GLOBAL_CDN_URL.to_string()
-                        } else {
-                            EU_CDN_URL.to_string()
-                        }
-                    }),
+                    opts.base_url()
+                        .clone()
+                        .unwrap_or_else(|| match *opts.data_governance() {
+                            DataGovernance::Global => GLOBAL_CDN_URL.to_owned(),
+                            DataGovernance::EU => EU_CDN_URL.to_owned(),
+                        }),
                     !opts.base_url().is_none(),
                     opts.sdk_key(),
                     opts.polling_mode().mode_identifier(),
@@ -109,8 +108,8 @@ impl ConfigService {
         let result =
             fetch_if_older(&self.state, &self.options, DateTime::<Utc>::MAX_UTC, false).await;
         match result {
-            ServiceResult::Ok(_) => Ok(()),
-            ServiceResult::Failed(err, _) => Err(err),
+            ServiceResult::Ok(_, _) => Ok(()),
+            ServiceResult::Failed(err, _, _) => Err(err),
         }
     }
 
@@ -158,7 +157,7 @@ async fn fetch_if_older(
 
     if entry.fetch_time > threshold || state.offline.load(Ordering::SeqCst) || prefer_cached {
         state.initialized();
-        return ServiceResult::Ok(entry.config.clone());
+        return ServiceResult::Ok(entry.config.clone(), entry.fetch_time);
     }
 
     let response = state.fetcher.fetch(&entry.etag).await;
@@ -169,14 +168,14 @@ async fn fetch_if_older(
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
-            ServiceResult::Ok(entry.config.clone())
+            ServiceResult::Ok(entry.config.clone(), entry.fetch_time)
         }
         FetchResponse::NotModified => {
             *entry = entry.with_time(Utc::now());
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
-            ServiceResult::Ok(entry.config.clone())
+            ServiceResult::Ok(entry.config.clone(), entry.fetch_time)
         }
         FetchResponse::Failed(err, transient) => {
             if !transient && !entry.is_empty() {
@@ -185,7 +184,11 @@ async fn fetch_if_older(
                     .cache()
                     .write(&state.cache_key, entry.serialize().as_str());
             }
-            ServiceResult::Failed(err, entry.config.clone())
+            ServiceResult::Failed(
+                ClientError::Fetch(err.to_string()),
+                entry.config.clone(),
+                entry.fetch_time,
+            )
         }
     }
 }
@@ -644,7 +647,7 @@ mod service_tests {
 
         fn write(&self, _: &str, value: &str) {
             let mut val = self.val.lock().unwrap();
-            *val = value.to_string()
+            *val = value.to_owned()
         }
     }
 }

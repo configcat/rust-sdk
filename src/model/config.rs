@@ -1,4 +1,4 @@
-use crate::errors::ClientError;
+use crate::errors::InternalError;
 use crate::model::enums::{
     PrerequisiteFlagComparator, RedirectMode, SegmentComparator, SettingType, UserComparator,
 };
@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+const INVALID_ATTRIBUTE: &str = "<invalid attribute>";
 
 #[derive(Debug, Clone)]
 pub struct ConfigEntry {
@@ -59,46 +61,46 @@ pub fn entry_from_json(
     json: &str,
     etag: &str,
     fetch_time: DateTime<Utc>,
-) -> Result<ConfigEntry, ClientError> {
+) -> Result<ConfigEntry, InternalError> {
     match serde_json::from_str::<Config>(json) {
         Ok(config) => Ok(ConfigEntry {
             config: Arc::new(config),
-            etag: etag.to_string(),
+            etag: etag.to_owned(),
             fetch_time,
-            config_json: json.to_string(),
+            config_json: json.to_owned(),
         }),
-        Err(err) => Err(ClientError::Parse(err.to_string())),
+        Err(err) => Err(InternalError::Parse(err.to_string())),
     }
 }
 
-pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, ClientError> {
+pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, InternalError> {
     let time_index = if let Some(time_index) = cached_json.find('\n') {
         time_index
     } else {
-        return Err(ClientError::Parse(
-            "Number of values is fewer than expected".to_string(),
+        return Err(InternalError::Parse(
+            "Number of values is fewer than expected".to_owned(),
         ));
     };
     let without_time = &cached_json[time_index + 1..];
     let etag_index = if let Some(etag_index) = without_time.find('\n') {
         etag_index
     } else {
-        return Err(ClientError::Parse(
-            "Number of values is fewer than expected".to_string(),
+        return Err(InternalError::Parse(
+            "Number of values is fewer than expected".to_owned(),
         ));
     };
     let time_string = &cached_json[..time_index];
     let time = if let Ok(time) = time_string.parse::<i64>() {
         time
     } else {
-        return Err(ClientError::Parse(format!(
+        return Err(InternalError::Parse(format!(
             "Invalid fetch time: '{time_string}'"
         )));
     };
     let fetch_time = if let Some(fetch_time) = DateTime::from_timestamp_millis(time) {
         fetch_time
     } else {
-        return Err(ClientError::Parse(format!(
+        return Err(InternalError::Parse(format!(
             "Invalid unix seconds value: '{time}'"
         )));
     };
@@ -134,6 +136,7 @@ pub struct Preferences {
     pub salt: String,
 }
 
+/// Describes a feature flag or setting.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Setting {
     /// The value that is returned when none of the targeting rules or percentage options yield a result.
@@ -157,6 +160,7 @@ pub struct Setting {
 }
 
 #[derive(Deserialize, Debug)]
+/// Describes a segment.
 pub struct Segment {
     /// The name of the segment.
     #[serde(rename = "n")]
@@ -167,6 +171,7 @@ pub struct Segment {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+/// Describes a targeting rule.
 pub struct TargetingRule {
     /// The value associated with the targeting rule or nil if the targeting rule has percentage options THEN part.
     #[serde(rename = "s")]
@@ -180,6 +185,7 @@ pub struct TargetingRule {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+/// Describes a condition that can contain either a [`UserCondition`], a [`SegmentCondition`], or a [`PrerequisiteFlagCondition`].
 pub struct Condition {
     /// Describes a condition that works with User Object attributes.
     #[serde(rename = "u")]
@@ -193,6 +199,7 @@ pub struct Condition {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+/// Describes a condition that is based on a [`crate::User`] attribute.
 pub struct UserCondition {
     /// The value that the User Object attribute is compared to, when the comparator works with a single text comparison value.
     #[serde(rename = "s")]
@@ -211,6 +218,15 @@ pub struct UserCondition {
     pub comp_attr: Option<String>,
 }
 
+impl UserCondition {
+    pub(crate) fn fmt_comp_attr(&self) -> String {
+        self.comp_attr
+            .clone()
+            .unwrap_or(INVALID_ATTRIBUTE.to_owned())
+    }
+}
+
+/// Describes a condition that is based on a [`Segment`].
 #[derive(Deserialize, Debug, Clone)]
 pub struct SegmentCondition {
     /// Identifies the segment that the condition is based on.
@@ -221,6 +237,7 @@ pub struct SegmentCondition {
     pub segment_comparator: SegmentComparator,
 }
 
+/// Describes a condition that is based on a prerequisite flag.
 #[derive(Deserialize, Debug, Clone)]
 pub struct PrerequisiteFlagCondition {
     /// The key of the prerequisite flag that the condition is based on.
@@ -234,6 +251,7 @@ pub struct PrerequisiteFlagCondition {
     pub flag_value: SettingValue,
 }
 
+/// Describes a percentage option.
 #[derive(Deserialize, Debug, Clone)]
 pub struct PercentageOption {
     /// The served value of the percentage option.
@@ -247,6 +265,7 @@ pub struct PercentageOption {
     pub variation_id: Option<String>,
 }
 
+/// Describes a setting value along with related data.
 #[derive(Deserialize, Debug, Clone)]
 pub struct ServedValue {
     /// The value associated with the targeting rule.
@@ -257,6 +276,7 @@ pub struct ServedValue {
     pub variation_id: Option<String>,
 }
 
+/// Describes a setting's value.
 #[derive(Deserialize, Debug, Clone)]
 pub struct SettingValue {
     /// Holds a bool feature flag's value.
