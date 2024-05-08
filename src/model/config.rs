@@ -3,11 +3,11 @@ use crate::model::enums::{
     PrerequisiteFlagComparator, RedirectMode, SegmentComparator, SettingType, UserComparator,
 };
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serializer};
+use std::cmp::min;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-
-const INVALID_ATTRIBUTE: &str = "<invalid attribute>";
 
 #[derive(Debug, Clone)]
 pub struct ConfigEntry {
@@ -209,7 +209,7 @@ pub struct UserCondition {
     pub double_val: Option<f64>,
     /// The value that the User Object attribute is compared to, when the comparator works with an array of text comparison value.
     #[serde(rename = "l")]
-    pub string_arr_val: Option<Vec<String>>,
+    pub string_vec_val: Option<Vec<String>>,
     /// The operator which defines the relation between the comparison attribute and the comparison value.
     #[serde(rename = "c")]
     pub comparator: UserComparator,
@@ -219,10 +219,67 @@ pub struct UserCondition {
 }
 
 impl UserCondition {
+    const INVALID_ATTRIBUTE: &'static str = "<invalid attribute>";
+
     pub(crate) fn fmt_comp_attr(&self) -> String {
         self.comp_attr
             .clone()
-            .unwrap_or(INVALID_ATTRIBUTE.to_owned())
+            .unwrap_or(Self::INVALID_ATTRIBUTE.to_owned())
+    }
+}
+
+const STRING_LIST_MAX_LENGTH: usize = 10;
+
+impl Display for UserCondition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let res = write!(f, "User.{} {}", self.fmt_comp_attr(), self.comparator);
+        if self.double_val.is_none() && self.string_val.is_none() && self.string_vec_val.is_none() {
+            return f.write_str("<invalid value>");
+        }
+        if let Some(num) = self.double_val {
+            return if self.comparator.is_date() {
+                let date = DateTime::from_timestamp_millis(num as i64).unwrap();
+                write!(f, "{num} ({date})")
+            } else {
+                f.serialize_f64(num)
+            };
+        }
+        if let Some(text) = self.string_val.as_ref() {
+            return if self.comparator.is_sensitive() {
+                f.write_str("<hashed value>")
+            } else {
+                f.write_str(text.as_str())
+            };
+        }
+        if let Some(vec) = self.string_vec_val.as_ref() {
+            return if self.comparator.is_sensitive() {
+                let val_t = if vec.len() > 1 { "values" } else { "value" };
+                write!(f, "[<{} hashed {val_t}>]", vec.len())
+            } else {
+                let len = vec.len();
+                let val_t = if len - STRING_LIST_MAX_LENGTH > 1 {
+                    "values"
+                } else {
+                    "value"
+                };
+                let limit = min(len, STRING_LIST_MAX_LENGTH);
+                let mut arr_txt = String::default();
+                for (index, item) in vec.iter().enumerate() {
+                    arr_txt.push_str(format!("'{item}'").as_str());
+                    if index < limit - 1 {
+                        arr_txt.push_str(", ");
+                    } else if len > STRING_LIST_MAX_LENGTH {
+                        arr_txt.push_str(
+                            format!(", ... <{} more {val_t}>", len - STRING_LIST_MAX_LENGTH)
+                                .as_str(),
+                        );
+                        break;
+                    }
+                }
+                write!(f, "[{arr_txt}]")
+            };
+        }
+        res
     }
 }
 
@@ -291,6 +348,22 @@ pub struct SettingValue {
     /// Holds a whole number setting's value.
     #[serde(rename = "i")]
     pub int_val: Option<i64>,
+}
+
+impl Display for SettingValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(b) = self.bool_val.as_ref() {
+            f.serialize_bool(*b)
+        } else if let Some(s) = self.string_val.as_ref() {
+            f.write_str(s)
+        } else if let Some(fl) = self.float_val.as_ref() {
+            f.serialize_f64(*fl)
+        } else if let Some(i) = self.int_val.as_ref() {
+            f.serialize_i64(*i)
+        } else {
+            f.write_str("<invalid value>")
+        }
+    }
 }
 
 #[cfg(test)]

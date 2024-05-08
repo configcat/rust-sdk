@@ -1,5 +1,3 @@
-#[macro_use]
-mod macros;
 mod cache;
 mod client;
 mod constants;

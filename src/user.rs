@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use semver::Version;
+use serde::Serializer;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 pub const IDENTIFIER: &str = "Identifier";
 pub const EMAIL: &str = "Email";
@@ -18,10 +20,24 @@ pub enum UserValue {
     Float(f64),
     /// Datetime user attribute value.
     DateTime(DateTime<Utc>),
-    /// String array user attribute value.
+    /// String vector user attribute value.
     StringVec(Vec<String>),
     /// Semantic version user attribute value.
     SemVer(Version),
+}
+
+impl Display for UserValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserValue::String(val) => f.write_str(val),
+            UserValue::Int(val) => f.serialize_i64(*val),
+            UserValue::UInt(val) => f.serialize_u64(*val),
+            UserValue::Float(val) => f.serialize_f64(*val),
+            UserValue::DateTime(val) => f.write_str(val.to_string().as_str()),
+            UserValue::StringVec(_) => f.write_str("<vec of strings>"),
+            UserValue::SemVer(val) => f.write_str(val.to_string().as_str()),
+        }
+    }
 }
 
 /// Describes a User Object. Contains user attributes which are used for evaluating targeting rules and percentage options.

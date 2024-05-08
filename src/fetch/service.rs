@@ -4,11 +4,10 @@ use std::sync::Once;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use log::warn;
 use tokio_util::sync::CancellationToken;
 
-use crate::constants::{
-    CONFIG_FILE_NAME, EU_CDN_URL, GLOBAL_CDN_URL, SERIALIZATION_FORMAT_VERSION,
-};
+use crate::constants::{CONFIG_FILE_NAME, SERIALIZATION_FORMAT_VERSION};
 use crate::errors::ClientError;
 use crate::fetch::fetcher::{FetchResponse, Fetcher};
 use crate::model::config::{entry_from_cached_json, Config, ConfigEntry};
@@ -55,19 +54,25 @@ pub struct ConfigService {
 }
 
 impl ConfigService {
+    const GLOBAL_CDN_URL: &'static str = "https://cdn-global.configcat.com";
+    const EU_CDN_URL: &'static str = "https://cdn-eu.configcat.com";
+
     pub fn new(opts: &Arc<Options>) -> Self {
         let service = Self {
             state: Arc::new(ServiceState {
-                cache_key: sha1(format!(
-                    "{sdk_key}_{CONFIG_FILE_NAME}_{SERIALIZATION_FORMAT_VERSION}",
-                    sdk_key = opts.sdk_key()
-                )),
+                cache_key: sha1(
+                    format!(
+                        "{}_{CONFIG_FILE_NAME}_{SERIALIZATION_FORMAT_VERSION}",
+                        opts.sdk_key()
+                    )
+                    .as_str(),
+                ),
                 fetcher: Fetcher::new(
                     opts.base_url()
                         .clone()
                         .unwrap_or_else(|| match *opts.data_governance() {
-                            DataGovernance::Global => GLOBAL_CDN_URL.to_owned(),
-                            DataGovernance::EU => EU_CDN_URL.to_owned(),
+                            DataGovernance::Global => Self::GLOBAL_CDN_URL.to_owned(),
+                            DataGovernance::EU => Self::EU_CDN_URL.to_owned(),
                         }),
                     !opts.base_url().is_none(),
                     opts.sdk_key(),
@@ -206,7 +211,7 @@ fn read_cache(
     match parsed {
         Ok(entry) => Some(entry),
         Err(err) => {
-            log_err!(event_id: 2201, "Error occurred while reading the cache. ({err})");
+            warn!(event_id = 2201; "Error occurred while reading the cache. ({err})");
             None
         }
     }

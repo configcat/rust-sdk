@@ -1,4 +1,5 @@
 use serde_repr::Deserialize_repr;
+use std::fmt::{Display, Formatter};
 
 /// Describes the location of your feature flag and setting data within the ConfigCat CDN.
 #[derive(Clone, PartialEq, Debug)]
@@ -52,7 +53,7 @@ pub enum PrerequisiteFlagComparator {
 }
 
 /// User Object attribute comparison operator used during the evaluation process.
-#[derive(Debug, Clone, Deserialize_repr)]
+#[derive(Debug, Clone, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum UserComparator {
     /// Checks whether the comparison attribute is equal to any of the comparison values.
@@ -127,4 +128,82 @@ pub enum UserComparator {
     ArrayContainsAnyOf = 34,
     /// Checks whether the comparison attribute interpreted as a string list does not contain any of the comparison values.
     ArrayNotContainsAnyOf = 35,
+}
+
+impl Display for UserComparator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserComparator::OneOf => f.write_str("IS ONE OF"),
+            UserComparator::NotOneOf => f.write_str("IS NOT ONE OF"),
+            UserComparator::Contains => f.write_str("CONTAINS ANY OF"),
+            UserComparator::NotContains => f.write_str("NOT CONTAINS ANY OF"),
+            UserComparator::OneOfSemver => f.write_str("IS ONE OF"),
+            UserComparator::NotOneOfSemver => f.write_str("IS NOT ONE OF"),
+            UserComparator::LessSemver => f.write_str("<"),
+            UserComparator::LessEqSemver => f.write_str("<="),
+            UserComparator::GreaterSemver => f.write_str(">"),
+            UserComparator::GreaterEqSemver => f.write_str(">="),
+            UserComparator::EqNum => f.write_str("="),
+            UserComparator::NotEqNum => f.write_str("!="),
+            UserComparator::LessNum => f.write_str("<"),
+            UserComparator::LessEqNum => f.write_str("<="),
+            UserComparator::GreaterNum => f.write_str(">"),
+            UserComparator::GreaterEqNum => f.write_str(">="),
+            UserComparator::OneOfHashed => f.write_str("IS ONE OF"),
+            UserComparator::NotOneOfHashed => f.write_str("IS NOT ONE OF"),
+            UserComparator::BeforeDateTime => f.write_str("BEFORE"),
+            UserComparator::AfterDateTime => f.write_str("AFTER"),
+            UserComparator::EqHashed => f.write_str("EQUALS"),
+            UserComparator::NotEqHashed => f.write_str("NOT EQUALS"),
+            UserComparator::StartsWithAnyOfHashed => f.write_str("STARTS WITH ANY OF"),
+            UserComparator::NotStartsWithAnyOfHashed => f.write_str("NOT STARTS WITH ANY OF"),
+            UserComparator::EndsWithAnyOfHashed => f.write_str("ENDS WITH ANY OF"),
+            UserComparator::NotEndsWithAnyOfHashed => f.write_str("NOT ENDS WITH ANY OF"),
+            UserComparator::ArrayContainsAnyOfHashed => f.write_str("ARRAY CONTAINS ANY OF"),
+            UserComparator::ArrayNotContainsAnyOfHashed => f.write_str("ARRAY NOT CONTAINS ANY OF"),
+            UserComparator::Eq => f.write_str("EQUALS"),
+            UserComparator::NotEq => f.write_str("NOT EQUALS"),
+            UserComparator::StartsWithAnyOf => f.write_str("STARTS WITH ANY OF"),
+            UserComparator::NotStartsWithAnyOf => f.write_str("NOT STARTS WITH ANY OF"),
+            UserComparator::EndsWithAnyOf => f.write_str("ENDS WITH ANY OF"),
+            UserComparator::NotEndsWithAnyOf => f.write_str("NOT ENDS WITH ANY OF"),
+            UserComparator::ArrayContainsAnyOf => f.write_str("ARRAY CONTAINS ANY OF"),
+            UserComparator::ArrayNotContainsAnyOf => f.write_str("ARRAY NOT CONTAINS ANY OF"),
+        }
+    }
+}
+
+impl UserComparator {
+    pub(crate) fn is_sensitive(&self) -> bool {
+        matches!(
+            self,
+            UserComparator::OneOfHashed
+                | UserComparator::NotOneOfHashed
+                | UserComparator::EqHashed
+                | UserComparator::NotEqHashed
+                | UserComparator::StartsWithAnyOfHashed
+                | UserComparator::NotStartsWithAnyOfHashed
+                | UserComparator::EndsWithAnyOfHashed
+                | UserComparator::NotEndsWithAnyOfHashed
+                | UserComparator::ArrayContainsAnyOfHashed
+                | UserComparator::ArrayNotContainsAnyOfHashed
+        )
+    }
+
+    pub(crate) fn is_date(&self) -> bool {
+        matches!(
+            self,
+            UserComparator::AfterDateTime | UserComparator::BeforeDateTime
+        )
+    }
+
+    pub(crate) fn is_starts_with(&self) -> bool {
+        matches!(
+            self,
+            UserComparator::StartsWithAnyOf
+                | UserComparator::StartsWithAnyOfHashed
+                | UserComparator::NotStartsWithAnyOf
+                | UserComparator::NotStartsWithAnyOfHashed
+        )
+    }
 }

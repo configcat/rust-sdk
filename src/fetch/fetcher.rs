@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::Utc;
+use log::{debug, error, warn};
 use reqwest::header::{HeaderMap, ETAG, IF_NONE_MATCH};
 
 use crate::constants::{CONFIG_FILE_NAME, PKG_VERSION, SDK_KEY_PROXY_PREFIX};
@@ -86,7 +87,7 @@ impl Fetcher {
                         if redirect == RedirectMode::No {
                             return response;
                         } else if redirect == RedirectMode::Should {
-                            log_warn!(event_id: 3002, "The `.data_governance()` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard. Read more: https://configcat.com/docs/advanced/data-governance")
+                            warn!(event_id = 3002; "The `.data_governance()` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard. Read more: https://configcat.com/docs/advanced/data-governance")
                         }
                     }
                     _ => return response,
@@ -95,7 +96,7 @@ impl Fetcher {
             }
         }
         let msg = "Redirection loop encountered while trying to fetch config JSON. Please contact us at https://configcat.com/support".to_owned();
-        log_err!(event_id: 1104, "{}", msg);
+        error!(event_id = 1104; "{}", msg);
         Failed(InternalError::Http(msg), true)
     }
 
@@ -115,7 +116,7 @@ impl Fetcher {
         match result {
             Ok(response) => match response.status().as_u16() {
                 200 => {
-                    log_debug!("Fetch was successful: new config fetched");
+                    debug!("Fetch was successful: new config fetched");
                     let headers = response.headers().clone();
                     let etag = if let Some(header) = headers.get(ETAG) {
                         header.to_str().unwrap_or("")
@@ -130,41 +131,41 @@ impl Fetcher {
                                 Ok(entry) => Fetched(entry),
                                 Err(parse_error) => {
                                     let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {parse_error}");
-                                    log_err!(event_id: 1105, "{}", msg);
+                                    error!(event_id = 1105; "{}", msg);
                                     Failed(InternalError::Http(msg), true)
                                 }
                             }
                         }
                         Err(body_error) => {
                             let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {body_error}");
-                            log_err!(event_id: 1105, "{}", msg);
+                            error!(event_id = 1105; "{}", msg);
                             Failed(InternalError::Http(msg), true)
                         }
                     }
                 }
                 304 => {
-                    log_debug!("Fetch was successful: not modified");
+                    debug!("Fetch was successful: not modified");
                     NotModified
                 }
                 code @ 404 | code @ 403 => {
                     let msg = format!("Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: {code}");
-                    log_err!(event_id: 1100, "{}", msg);
+                    error!(event_id = 1100; "{}", msg);
                     Failed(InternalError::Http(msg), false)
                 }
                 code => {
                     let msg = format!("Unexpected HTTP response was received while trying to fetch config JSON. Status code: {code}");
-                    log_err!(event_id: 1101, "{}", msg);
+                    error!(event_id = 1101; "{}", msg);
                     Failed(InternalError::Http(msg), true)
                 }
             },
             Err(error) => {
                 if error.is_timeout() {
                     let msg = "Request timed out while trying to fetch config JSON.".to_owned();
-                    log_err!(event_id: 1102, "{}", msg);
+                    error!(event_id = 1102; "{}", msg);
                     Failed(InternalError::Http(msg), true)
                 } else {
                     let msg = format!("Unexpected error occurred while trying to fetch config JSON. It is most likely due to a local network issue. Please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP. {error}");
-                    log_err!(event_id: 1103, "{}", msg);
+                    error!(event_id = 1103; "{}", msg);
                     Failed(InternalError::Http(msg), true)
                 }
             }
