@@ -281,13 +281,13 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         m1.assert_async().await;
         m2.assert_async().await;
@@ -308,13 +308,13 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         m1.assert_async().await;
         m2.assert_async().await;
@@ -334,23 +334,23 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         m1.assert_async().await;
         m2.assert_async().await;
@@ -371,17 +371,17 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         m1.assert_async().await;
         m2.assert_async().await;
@@ -402,23 +402,23 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         _ = service.refresh().await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         _ = service.refresh().await;
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         m1.assert_async().await;
         m2.assert_async().await;
@@ -443,7 +443,7 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         opts.cache().write(
             service.state.clone().cache_key.as_str(),
@@ -452,7 +452,7 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         m.assert_async().await;
     }
@@ -476,7 +476,7 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         opts.cache().write(
             service.state.clone().cache_key.as_str(),
@@ -485,7 +485,7 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test2");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         m1.assert_async().await;
         m2.assert_async().await;
@@ -505,7 +505,7 @@ mod service_tests {
 
         let result = service.get_config().await;
         let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().unwrap().string_val.unwrap(), "test1");
+        assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         let cached = opts.cache().read("").unwrap();
         let entry = entry_from_cached_json(cached.as_str()).unwrap();

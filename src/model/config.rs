@@ -3,7 +3,7 @@ use crate::model::enums::{
     PrerequisiteFlagComparator, RedirectMode, SegmentComparator, SettingType, UserComparator,
 };
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serializer};
+use serde::{Deserialize};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -63,12 +63,17 @@ pub fn entry_from_json(
     fetch_time: DateTime<Utc>,
 ) -> Result<ConfigEntry, InternalError> {
     match serde_json::from_str::<Config>(json) {
-        Ok(config) => Ok(ConfigEntry {
-            config: Arc::new(config),
-            etag: etag.to_owned(),
-            fetch_time,
-            config_json: json.to_owned(),
-        }),
+        Ok(config) => {
+            let mut entry = ConfigEntry {
+                config: Arc::new(config),
+                etag: etag.to_owned(),
+                fetch_time,
+                config_json: json.to_owned(),
+            };
+            let conf_mut = Arc::get_mut(&mut entry.config).unwrap();
+            post_process(conf_mut);
+            Ok(entry)
+        }
         Err(err) => Err(InternalError::Parse(err.to_string())),
     }
 }
@@ -110,6 +115,33 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Internal
     entry_from_json(config_json, etag, fetch_time)
 }
 
+fn post_process(config: &mut Config) {
+    config.salt = match &config.preferences {
+        Some(pref) => pref.url.clone(),
+        None => None,
+    };
+    for (_, value) in config.settings.iter_mut() {
+        value.salt = config.salt.clone();
+
+        if let Some(rules) = value.targeting_rules.as_mut() {
+            for rule in rules {
+                let rule_mut = Arc::get_mut(rule).unwrap();
+                if let Some(conditions) = rule_mut.conditions.as_mut() {
+                    for cond in conditions {
+                        if let Some(segment_condition) = cond.segment_condition.as_mut() {
+                            if let Some(segments) = &config.segments {
+                                if let Some(segment) = segments.get(segment_condition.index) {
+                                    segment_condition.segment = Some(segment.clone())
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Default)]
 pub struct Config {
     /// The dictionary of settings.
@@ -117,13 +149,13 @@ pub struct Config {
     pub settings: HashMap<String, Setting>,
     /// The list of segments.
     #[serde(rename = "s")]
-    pub segments: Option<Vec<Segment>>,
+    pub segments: Option<Vec<Arc<Segment>>>,
     /// The salt that was used to hash sensitive comparison values.
     #[serde(skip)]
     pub salt: Option<String>,
 
     #[serde(rename = "p")]
-    pub preferences: Option<Preferences>,
+    pub(crate) preferences: Option<Preferences>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -137,17 +169,17 @@ pub struct Preferences {
 }
 
 /// Describes a feature flag or setting.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct Setting {
     /// The value that is returned when none of the targeting rules or percentage options yield a result.
     #[serde(rename = "v")]
-    pub value: Option<SettingValue>,
+    pub value: SettingValue,
     /// The list of percentage options.
     #[serde(rename = "p")]
-    pub percentage_options: Option<Vec<PercentageOption>>,
+    pub percentage_options: Option<Vec<Arc<PercentageOption>>>,
     /// The list of targeting rules (where there is a logical OR relation between the items).
     #[serde(rename = "r")]
-    pub targeting_rules: Option<Vec<TargetingRule>>,
+    pub targeting_rules: Option<Vec<Arc<TargetingRule>>>,
     /// Variation ID (for analytical purposes).
     #[serde(rename = "i")]
     pub variation_id: Option<String>,
@@ -156,7 +188,10 @@ pub struct Setting {
     pub percentage_attribute: Option<String>,
     /// The setting's type. It can be `bool`, `String`, `i64` or `f64`.
     #[serde(rename = "t")]
-    pub setting_type: Option<SettingType>,
+    pub setting_type: SettingType,
+
+    #[serde(skip)]
+    pub(crate) salt: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -164,13 +199,13 @@ pub struct Setting {
 pub struct Segment {
     /// The name of the segment.
     #[serde(rename = "n")]
-    pub name: Option<String>,
+    pub name: String,
     /// The list of segment rule conditions (has a logical AND relation between the items).
     #[serde(rename = "r")]
-    pub conditions: Option<Vec<UserCondition>>,
+    pub conditions: Vec<UserCondition>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 /// Describes a targeting rule.
 pub struct TargetingRule {
     /// The value associated with the targeting rule or nil if the targeting rule has percentage options THEN part.
@@ -184,7 +219,7 @@ pub struct TargetingRule {
     pub percentage_options: Option<Vec<PercentageOption>>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 /// Describes a condition that can contain either a [`UserCondition`], a [`SegmentCondition`], or a [`PrerequisiteFlagCondition`].
 pub struct Condition {
     /// Describes a condition that works with User Object attributes.
@@ -198,7 +233,7 @@ pub struct Condition {
     pub prerequisite_flag_condition: Option<PrerequisiteFlagCondition>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 /// Describes a condition that is based on a [`crate::User`] attribute.
 pub struct UserCondition {
     /// The value that the User Object attribute is compared to, when the comparator works with a single text comparison value.
@@ -215,24 +250,14 @@ pub struct UserCondition {
     pub comparator: UserComparator,
     /// The User Object attribute that the condition is based on. Can be "Identifier", "Email", "Country" or any custom attribute.
     #[serde(rename = "a")]
-    pub comp_attr: Option<String>,
-}
-
-impl UserCondition {
-    const INVALID_ATTRIBUTE: &'static str = "<invalid attribute>";
-
-    pub(crate) fn fmt_comp_attr(&self) -> String {
-        self.comp_attr
-            .clone()
-            .unwrap_or(Self::INVALID_ATTRIBUTE.to_owned())
-    }
+    pub comp_attr: String,
 }
 
 const STRING_LIST_MAX_LENGTH: usize = 10;
 
 impl Display for UserCondition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let res = write!(f, "User.{} {}", self.fmt_comp_attr(), self.comparator);
+        let res = write!(f, "User.{} {}", self.comp_attr, self.comparator);
         if self.double_val.is_none() && self.string_val.is_none() && self.string_vec_val.is_none() {
             return f.write_str("<invalid value>");
         }
@@ -241,7 +266,7 @@ impl Display for UserCondition {
                 let date = DateTime::from_timestamp_millis(num as i64).unwrap();
                 write!(f, "{num} ({date})")
             } else {
-                f.serialize_f64(num)
+                write!(f, "{num}")
             };
         }
         if let Some(text) = self.string_val.as_ref() {
@@ -284,22 +309,35 @@ impl Display for UserCondition {
 }
 
 /// Describes a condition that is based on a [`Segment`].
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct SegmentCondition {
     /// Identifies the segment that the condition is based on.
     #[serde(rename = "s")]
-    pub index: i64,
+    pub index: usize,
     /// The operator which defines the expected result of the evaluation of the segment.
     #[serde(rename = "c")]
     pub segment_comparator: SegmentComparator,
+
+    #[serde(skip)]
+    pub(crate) segment: Option<Arc<Segment>>,
+}
+
+impl Display for SegmentCondition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = match self.segment.as_ref() {
+            Some(seg) => seg.name.as_str(),
+            None => "<invalid name>",
+        };
+        write!(f, "User {} {name}", self.segment_comparator)
+    }
 }
 
 /// Describes a condition that is based on a prerequisite flag.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct PrerequisiteFlagCondition {
     /// The key of the prerequisite flag that the condition is based on.
     #[serde(rename = "f")]
-    pub flag_key: Option<String>,
+    pub flag_key: String,
     /// The operator which defines the relation between the evaluated value of the prerequisite flag and the comparison value.
     #[serde(rename = "c")]
     pub prerequisite_comparator: PrerequisiteFlagComparator,
@@ -308,8 +346,18 @@ pub struct PrerequisiteFlagCondition {
     pub flag_value: SettingValue,
 }
 
+impl Display for PrerequisiteFlagCondition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            self.flag_key, self.prerequisite_comparator, self.flag_value
+        )
+    }
+}
+
 /// Describes a percentage option.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct PercentageOption {
     /// The served value of the percentage option.
     #[serde(rename = "v")]
@@ -323,7 +371,7 @@ pub struct PercentageOption {
 }
 
 /// Describes a setting value along with related data.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct ServedValue {
     /// The value associated with the targeting rule.
     #[serde(rename = "v")]
@@ -334,7 +382,7 @@ pub struct ServedValue {
 }
 
 /// Describes a setting's value.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct SettingValue {
     /// Holds a bool feature flag's value.
     #[serde(rename = "b")]
@@ -350,16 +398,64 @@ pub struct SettingValue {
     pub int_val: Option<i64>,
 }
 
+impl SettingValue {
+    pub(crate) fn is_valid(&self, setting_type: &SettingType) -> bool {
+        match setting_type {
+            SettingType::Bool => self.bool_val.is_some(),
+            SettingType::String => self.string_val.is_some(),
+            SettingType::Int => self.int_val.is_some(),
+            SettingType::Double => self.float_val.is_some(),
+        }
+    }
+
+    pub(crate) fn eq_by_type(&self, other: &SettingValue, setting_type: &SettingType) -> bool {
+        match setting_type {
+            SettingType::Bool => {
+                if let Some(bool_val) = self.bool_val {
+                    if let Some(other_bool_val) = other.bool_val {
+                        return bool_val == other_bool_val;
+                    }
+                }
+                false
+            }
+            SettingType::String => {
+                if let Some(string_val) = self.string_val.as_ref() {
+                    if let Some(other_string_val) = other.string_val.as_ref() {
+                        return string_val == other_string_val;
+                    }
+                }
+                false
+            }
+            SettingType::Int => {
+                if let Some(int_val) = self.int_val {
+                    if let Some(other_int_val) = other.int_val {
+                        return int_val == other_int_val;
+                    }
+                }
+                false
+            }
+            SettingType::Double => {
+                if let Some(float_val) = self.float_val {
+                    if let Some(other_float_val) = other.float_val {
+                        return float_val == other_float_val;
+                    }
+                }
+                false
+            }
+        }
+    }
+}
+
 impl Display for SettingValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(b) = self.bool_val.as_ref() {
-            f.serialize_bool(*b)
+            write!(f, "{b}")
         } else if let Some(s) = self.string_val.as_ref() {
             f.write_str(s)
         } else if let Some(fl) = self.float_val.as_ref() {
-            f.serialize_f64(*fl)
+            write!(f, "{fl}")
         } else if let Some(i) = self.int_val.as_ref() {
-            f.serialize_i64(*i)
+            write!(f, "{i}")
         } else {
             f.write_str("<invalid value>")
         }

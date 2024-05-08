@@ -19,7 +19,7 @@ pub enum RedirectMode {
 }
 
 /// The type of a feature flag or setting.
-#[derive(Debug, Clone, Deserialize_repr)]
+#[derive(Debug, Deserialize_repr)]
 #[repr(u8)]
 pub enum SettingType {
     /// The on/off type (feature flag).
@@ -33,7 +33,7 @@ pub enum SettingType {
 }
 
 /// Segment comparison operator used during the evaluation process.
-#[derive(Debug, Clone, Deserialize_repr)]
+#[derive(Debug, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum SegmentComparator {
     /// Checks whether the conditions of the specified segment are evaluated to true.
@@ -42,8 +42,17 @@ pub enum SegmentComparator {
     IsNotIn = 1,
 }
 
+impl Display for SegmentComparator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SegmentComparator::IsIn => f.write_str("IS IN SEGMENT"),
+            SegmentComparator::IsNotIn => f.write_str("IS NOT IN SEGMENT"),
+        }
+    }
+}
+
 /// Prerequisite flag comparison operator used during the evaluation process.
-#[derive(Debug, Clone, Deserialize_repr)]
+#[derive(Debug, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum PrerequisiteFlagComparator {
     /// Checks whether the evaluated value of the specified prerequisite flag is equal to the comparison value.
@@ -52,8 +61,17 @@ pub enum PrerequisiteFlagComparator {
     NotEq = 1,
 }
 
+impl Display for PrerequisiteFlagComparator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrerequisiteFlagComparator::Eq => f.write_str("EQUALS"),
+            PrerequisiteFlagComparator::NotEq => f.write_str("NOT EQUALS"),
+        }
+    }
+}
+
 /// User Object attribute comparison operator used during the evaluation process.
-#[derive(Debug, Clone, PartialEq, Deserialize_repr)]
+#[derive(Debug, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum UserComparator {
     /// Checks whether the comparison attribute is equal to any of the comparison values.

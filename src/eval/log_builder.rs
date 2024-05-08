@@ -1,5 +1,5 @@
 use crate::eval::evaluator::ConditionResult;
-use crate::TargetingRule;
+use crate::ServedValue;
 
 #[derive(Default)]
 pub struct EvalLogBuilder {
@@ -11,22 +11,22 @@ impl EvalLogBuilder {
     const NEW_LINE_CHAR: char = '\n';
     const INDENT_SEQ: &'static str = "  ";
 
-    pub fn reset_indent(mut self) -> Self {
+    pub fn reset_indent(&mut self) -> &mut Self {
         self.indent = 0;
         self
     }
 
-    pub fn inc_indent(mut self) -> Self {
+    pub fn inc_indent(&mut self) -> &mut Self {
         self.indent += 1;
         self
     }
 
-    pub fn dec_indent(mut self) -> Self {
+    pub fn dec_indent(&mut self) -> &mut Self {
         self.indent -= 1;
         self
     }
 
-    pub fn new_ln(mut self, message: Option<&str>) -> Self {
+    pub fn new_ln(&mut self, message: Option<&str>) -> &mut Self {
         self.content.push(Self::NEW_LINE_CHAR);
         self.content
             .push_str(Self::INDENT_SEQ.repeat(self.indent).as_str());
@@ -36,44 +36,39 @@ impl EvalLogBuilder {
         self
     }
 
-    pub fn append(mut self, val: impl Into<String>) -> Self {
-        self.content.push_str(val.into().as_str());
+    pub fn append(&mut self, val: &str) -> &mut Self {
+        self.content.push_str(val);
         self
     }
 
     pub fn append_then_clause(
-        mut self,
+        &mut self,
         new_line: bool,
         result: &ConditionResult,
-        rule: &TargetingRule,
-    ) -> Self {
-        self = self.inc_indent();
-
+        rule_srv_value: &Option<ServedValue>,
+    ) -> &mut Self {
+        let builder = self.inc_indent();
         if new_line {
-            self = self.new_ln(None);
+            builder.new_ln(None);
         } else {
-            self = self.append(" ");
+            builder.append(" ");
         }
-        self = self.append("THEN");
-
-        if let Some(sv) = rule.served_value.as_ref() {
-            self = self.append(format!("{setting_value}", setting_value = sv.value));
+        builder.append("THEN");
+        if let Some(sv) = rule_srv_value.as_ref() {
+            builder.append(format!("{}", sv.value).as_str());
         } else {
-            self = self.append(" % options");
+            builder.append(" % options");
         }
-
-        match result {
-            ConditionResult::Ok(matched) => {
+        return match result {
+            ConditionResult::Done(matched) => {
                 if *matched {
-                    self = self.append("MATCH, applying rule")
+                    builder.append("MATCH, applying rule")
                 } else {
-                    self = self.append("no match")
+                    builder.append("no match")
                 }
             }
-            _ => self = self.append(format!("{result}")),
-        }
-
-        self
+            _ => builder.append(format!("{result}").as_str()),
+        };
     }
 
     pub fn content(&self) -> &str {

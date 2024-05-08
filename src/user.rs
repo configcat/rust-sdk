@@ -30,9 +30,9 @@ impl Display for UserValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             UserValue::String(val) => f.write_str(val),
-            UserValue::Int(val) => f.serialize_i64(*val),
-            UserValue::UInt(val) => f.serialize_u64(*val),
-            UserValue::Float(val) => f.serialize_f64(*val),
+            UserValue::Int(val) => write!(f, "{val}"),
+            UserValue::UInt(val) => write!(f, "{val}"),
+            UserValue::Float(val) => write!(f, "{val}"),
             UserValue::DateTime(val) => f.write_str(val.to_string().as_str()),
             UserValue::StringVec(_) => f.write_str("<vec of strings>"),
             UserValue::SemVer(val) => f.write_str(val.to_string().as_str()),
