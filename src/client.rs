@@ -22,14 +22,66 @@ impl Client {
         }
     }
 
+    /// Create a new [`OptionsBuilder`] used to build a [`Client`].
+    ///
+    /// # Errors
+    ///
+    /// This method fails if the given SDK key is empty or has an invalid format.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use configcat::{DataGovernance, Client, PollingMode};
+    ///
+    /// let client = Client::builder("SDK_KEY")
+    ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
+    ///     .data_governance(DataGovernance::EU)
+    ///     .build()
+    ///     .unwrap();
+    /// ```
     pub fn builder(sdk_key: &str) -> OptionsBuilder {
         OptionsBuilder::new(sdk_key)
     }
 
+    /// Create a new [`Client`] with the default [`Options`].
+    ///
+    /// # Errors
+    ///
+    /// This method fails if the given SDK key is empty or has an invalid format.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::Client;
+    ///
+    /// let client = Client::new("SDK_KEY").unwrap();
+    /// ```
     pub fn new(sdk_key: &str) -> Result<Self, ClientError> {
         OptionsBuilder::new(sdk_key).build()
     }
 
+    /// Initiate a force refresh on the cached config JSON data.
+    ///
+    /// # Errors
+    ///
+    /// This method fails in the following cases:
+    /// - The SDK is in offline mode.
+    /// - The SDK has a [`crate::OverrideBehavior::LocalOnly`] override set.
+    /// - The HTTP request that supposed to download the new config JSON fails.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::Client;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("SDK_KEY").unwrap();
+    ///
+    ///     _ = client.refresh().await
+    /// }
+    /// ```
     pub async fn refresh(&self) -> Result<(), ClientError> {
         if self.options.offline() {
             let err = ClientError::new(
@@ -42,10 +94,43 @@ impl Client {
         self.service.refresh().await
     }
 
+    /// Evaluate a feature flag identified by the given `key`.
+    ///
+    /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, User};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("SDK_KEY").unwrap();
+    ///
+    ///     let user = User::new("user-id");
+    ///     let value = client.get_bool_value("flag-key", Some(user), false).await;
+    /// }
+    /// ```
     pub async fn get_bool_value(&self, key: &str, user: Option<User>, default: bool) -> bool {
         self.get_bool_details(key, user, default).await.value
     }
 
+    /// The same as [`Client::get_bool_value`] but returns an [`EvaluationDetails`] which
+    /// contains additional information about the evaluation process.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, User};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("SDK_KEY").unwrap();
+    ///
+    ///     let user = User::new("user-id");
+    ///     let details = client.get_bool_details("flag-key", Some(user), false).await;
+    /// }
+    /// ```
     pub async fn get_bool_details(
         &self,
         key: &str,
@@ -62,7 +147,8 @@ impl Client {
                     value: val,
                     key: key.to_owned(),
                     user,
-                    ..EvaluationDetails::from_results(eval_result, &result)
+                    fetch_time: Some(*result.fetch_time()),
+                    ..eval_result.into()
                 },
                 None => {
                     let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was 'bool'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type));
@@ -77,6 +163,23 @@ impl Client {
         }
     }
 
+    /// Evaluate a feature flag identified by the given `key`.
+    ///
+    /// Returns an [`EvaluationDetails`] that contains the evaluated feature flag's value in a [`Value`] variant.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, User};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("SDK_KEY").unwrap();
+    ///
+    ///     let user = User::new("user-id");
+    ///     let value = client.get_flag_details("flag-key", Some(user)).await;
+    /// }
+    /// ```
     pub async fn get_flag_details(
         &self,
         key: &str,

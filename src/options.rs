@@ -32,7 +32,7 @@ pub struct Options {
 }
 
 impl Options {
-    /// Get the SDK key.
+    /// Gets the SDK key.
     pub fn sdk_key(&self) -> &str {
         &self.sdk_key
     }
@@ -42,27 +42,27 @@ impl Options {
         self.offline
     }
 
-    /// Get the configured base URL.
+    /// Gets the configured base URL.
     pub fn base_url(&self) -> &Option<String> {
         &self.base_url
     }
 
-    /// Get the configured [`DataGovernance`] option.
+    /// Gets the configured [`DataGovernance`] option.
     pub fn data_governance(&self) -> &DataGovernance {
         &self.data_governance
     }
 
-    /// Get the configured HTTP request timeout.
+    /// Gets the configured HTTP request timeout.
     pub fn http_timeout(&self) -> &Duration {
         &self.http_timeout
     }
 
-    /// Get the configured [`ConfigCache`] implementation.
+    /// Gets the configured [`ConfigCache`] implementation.
     pub fn cache(&self) -> &dyn ConfigCache {
         self.cache.borrow()
     }
 
-    /// Get the configured [`PollingMode`].
+    /// Gets the configured [`PollingMode`].
     pub fn polling_mode(&self) -> &PollingMode {
         &self.polling_mode
     }
@@ -108,7 +108,7 @@ impl OptionsBuilder {
         }
     }
 
-    /// Indicate whether the SDK should be initialized in offline mode or not.
+    /// Indicates whether the SDK should be initialized in offline mode or not.
     /// Default value is `false`.
     ///
     /// # Examples
@@ -124,7 +124,7 @@ impl OptionsBuilder {
         self
     }
 
-    /// Set the HTTP request timeout.
+    /// Sets the HTTP request timeout.
     /// Default value is `30` seconds.
     ///
     /// # Examples
@@ -141,7 +141,7 @@ impl OptionsBuilder {
         self
     }
 
-    /// Set a custom base URL.
+    /// Sets a custom base URL.
     ///
     /// # Examples
     ///
@@ -156,7 +156,7 @@ impl OptionsBuilder {
         self
     }
 
-    /// Set the [`DataGovernance`] option.
+    /// Sets the [`DataGovernance`] option.
     /// Default value is [`DataGovernance::Global`].
     ///
     /// # Examples
@@ -172,7 +172,7 @@ impl OptionsBuilder {
         self
     }
 
-    /// Set a [`ConfigCache`] implementation used for caching.
+    /// Sets a [`ConfigCache`] implementation used for caching.
     ///
     /// # Examples
     ///
@@ -200,7 +200,7 @@ impl OptionsBuilder {
         self
     }
 
-    /// Set the [`PollingMode`] of the SDK.
+    /// Sets the [`PollingMode`] of the SDK.
     /// Default value is [`PollingMode::AutoPoll`] with `60` seconds poll interval.
     ///
     /// # Examples
@@ -217,11 +217,11 @@ impl OptionsBuilder {
         self
     }
 
-    /// Create the [`Client`] from the configuration made on the builder.
+    /// Creates a [`Client`] from the configuration made on the builder.
     ///
     /// # Errors
     ///
-    /// This method fails if the given SDK key has an invalid format.
+    /// This method fails if the given SDK key is empty or has an invalid format.
     ///
     /// # Examples
     ///
@@ -272,7 +272,7 @@ impl OptionsBuilder {
         {
             return true;
         }
-        let comps = sdk_key.split('/').collect::<Vec<&str>>();
+        let comps: Vec<&str> = sdk_key.split('/').collect();
         match comps.len() {
             2 => {
                 comps[0].len() == Self::SDK_KEY_SECTION_LENGTH

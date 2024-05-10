@@ -16,24 +16,27 @@ use crate::modes::PollingMode;
 use crate::options::Options;
 use crate::utils::sha1;
 
-pub enum ConfigResult {
-    Ok(Arc<Config>, DateTime<Utc>),
-    Failed(ClientError, Arc<Config>, DateTime<Utc>),
+pub enum ServiceResult {
+    Ok(ConfigResult),
+    Err(ClientError, ConfigResult),
+}
+
+pub struct ConfigResult {
+    config: Arc<Config>,
+    fetch_time: DateTime<Utc>,
 }
 
 impl ConfigResult {
+    fn new(config: Arc<Config>, fetch_time: DateTime<Utc>) -> Self {
+        Self { config, fetch_time }
+    }
+
     pub fn config(&self) -> &Arc<Config> {
-        match self {
-            ConfigResult::Ok(entry, _) => entry,
-            ConfigResult::Failed(_, entry, _) => entry,
-        }
+        &self.config
     }
 
     pub fn fetch_time(&self) -> &DateTime<Utc> {
-        match self {
-            ConfigResult::Ok(_, time) => time,
-            ConfigResult::Failed(_, _, time) => time,
-        }
+        &self.fetch_time
     }
 }
 
@@ -115,15 +118,19 @@ impl ConfigService {
             PollingMode::LazyLoad(_) => false,
             _ => initialized,
         };
-        fetch_if_older(&self.state, &self.options, threshold, prefer_cached).await
+        let result = fetch_if_older(&self.state, &self.options, threshold, prefer_cached).await;
+        match result {
+            ServiceResult::Ok(config_result) => config_result,
+            ServiceResult::Err(_, config_result) => config_result,
+        }
     }
 
     pub async fn refresh(&self) -> Result<(), ClientError> {
         let result =
             fetch_if_older(&self.state, &self.options, DateTime::<Utc>::MAX_UTC, false).await;
         match result {
-            ConfigResult::Ok(_, _) => Ok(()),
-            ConfigResult::Failed(err, _, _) => Err(err),
+            ServiceResult::Ok(_) => Ok(()),
+            ServiceResult::Err(err, _) => Err(err),
         }
     }
 
@@ -161,7 +168,7 @@ async fn fetch_if_older(
     options: &Arc<Options>,
     threshold: DateTime<Utc>,
     prefer_cached: bool,
-) -> ConfigResult {
+) -> ServiceResult {
     let mut entry = state.cached_entry.lock().await;
     let from_cache = read_cache(state, options, &entry.config_json).unwrap_or_default();
 
@@ -171,7 +178,7 @@ async fn fetch_if_older(
 
     if entry.fetch_time > threshold || state.offline.load(Ordering::SeqCst) || prefer_cached {
         state.initialized();
-        return ConfigResult::Ok(entry.config.clone(), entry.fetch_time);
+        return ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time));
     }
 
     let response = state.fetcher.fetch(&entry.etag).await;
@@ -182,14 +189,14 @@ async fn fetch_if_older(
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
-            ConfigResult::Ok(entry.config.clone(), entry.fetch_time)
+            ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
         }
         FetchResponse::NotModified => {
             *entry = entry.with_time(Utc::now());
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
-            ConfigResult::Ok(entry.config.clone(), entry.fetch_time)
+            ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
         }
         FetchResponse::Failed(err, transient) => {
             if !transient && !entry.is_empty() {
@@ -198,7 +205,10 @@ async fn fetch_if_older(
                     .cache()
                     .write(&state.cache_key, entry.serialize().as_str());
             }
-            ConfigResult::Failed(err, entry.config.clone(), entry.fetch_time)
+            ServiceResult::Err(
+                err,
+                ConfigResult::new(entry.config.clone(), entry.fetch_time),
+            )
         }
     }
 }

@@ -1,3 +1,4 @@
+use semver::{Error, Version};
 use sha1::{Digest, Sha1};
 use sha2::Sha256;
 
@@ -7,12 +8,20 @@ pub fn sha1(payload: &str) -> String {
 }
 
 pub fn sha256(payload: &str, salt: &str, ctx_salt: &str) -> String {
-    let mut cont = String::new();
+    let mut cont = String::with_capacity(payload.len() + salt.len() + ctx_salt.len());
     cont.push_str(payload);
     cont.push_str(salt);
     cont.push_str(ctx_salt);
     let hash = Sha256::digest(cont);
     base16ct::lower::encode_string(&hash)
+}
+
+pub fn parse_semver(input: &str) -> Result<Version, Error> {
+    let mut input_mut = input;
+    if let Some((first, _)) = input.split_once('+') {
+        input_mut = first;
+    }
+    Version::parse(input_mut)
 }
 
 #[cfg(test)]

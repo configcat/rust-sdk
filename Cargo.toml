@@ -9,7 +9,6 @@ keywords = ["configcat", "feature-flag", "feature-toggle"]
 license = "MIT"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive", "rc"] }
@@ -28,9 +27,6 @@ sha2 = "0.10"
 base16ct = { version = "0.2", features = ["alloc"] }
 semver = "1.0"
 
-[build-dependencies]
-built = "0.7"
-
 [dev-dependencies]
 mockito = "1.2.0"
-tokio = { version = "1.17.0", features = ["macros"] }
+tokio = { version = "1.17.0", features = ["rt-multi-thread"] }

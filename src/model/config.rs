@@ -124,7 +124,7 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
 
 fn post_process(config: &mut Config) {
     config.salt = match &config.preferences {
-        Some(pref) => pref.url.clone(),
+        Some(pref) => pref.salt.clone(),
         None => None,
     };
     for (_, value) in config.settings.iter_mut() {
@@ -172,7 +172,7 @@ pub struct Preferences {
     #[serde(rename = "r")]
     pub redirect: Option<RedirectMode>,
     #[serde(rename = "s")]
-    pub salt: String,
+    pub salt: Option<String>,
 }
 
 /// Describes a feature flag or setting.
@@ -264,7 +264,7 @@ const STRING_LIST_MAX_LENGTH: usize = 10;
 
 impl Display for UserCondition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let res = write!(f, "User.{} {}", self.comp_attr, self.comparator);
+        let res = write!(f, "User.{} {} ", self.comp_attr, self.comparator);
         if self.float_val.is_none() && self.string_val.is_none() && self.string_vec_val.is_none() {
             return f.write_str(INVALID_VALUE_TXT);
         }
@@ -289,7 +289,7 @@ impl Display for UserCondition {
                 write!(f, "[<{} hashed {val_t}>]", vec.len())
             } else {
                 let len = vec.len();
-                let val_t = if len - STRING_LIST_MAX_LENGTH > 1 {
+                let val_t = if len > (STRING_LIST_MAX_LENGTH + 1) {
                     "values"
                 } else {
                     "value"
@@ -335,7 +335,7 @@ impl Display for SegmentCondition {
             Some(seg) => seg.name.as_str(),
             None => "<invalid name>",
         };
-        write!(f, "User {} {name}", self.segment_comparator)
+        write!(f, "User {} '{name}'", self.segment_comparator)
     }
 }
 

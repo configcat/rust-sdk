@@ -55,20 +55,25 @@ impl EvalLogBuilder {
         }
         builder.append("THEN");
         if let Some(sv) = rule_srv_value.as_ref() {
-            builder.append(format!("{}", sv.value).as_str());
+            builder.append(format!(" {}", sv.value).as_str());
         } else {
             builder.append(" % options");
         }
-        return match result {
+        builder.append(" => ");
+        match result {
             ConditionResult::Success(matched) => {
                 if *matched {
-                    builder.append("MATCH, applying rule")
+                    builder.append("MATCH, applying rule");
                 } else {
-                    builder.append("no match")
+                    builder.append("no match");
                 }
             }
-            _ => builder.append(format!("{result}").as_str()),
-        };
+            _ => {
+                builder.append(format!("{result}").as_str());
+            }
+        }
+        builder.dec_indent();
+        builder
     }
 
     pub fn content(&self) -> &str {

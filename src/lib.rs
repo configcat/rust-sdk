@@ -16,7 +16,9 @@ mod value;
 
 pub use cache::ConfigCache;
 pub use client::Client;
-pub use errors::ClientError;
+pub use constants::PKG_VERSION;
+pub use errors::{ClientError, ErrorKind};
+pub use eval::details::EvaluationDetails;
 pub use model::config::{
     Condition, PercentageOption, PrerequisiteFlagCondition, Segment, SegmentCondition, ServedValue,
     Setting, SettingValue, TargetingRule, UserCondition,
@@ -28,3 +30,4 @@ pub use modes::PollingMode;
 pub use options::{Options, OptionsBuilder};
 pub use r#override::behavior::OverrideBehavior;
 pub use user::{User, UserValue};
+pub use value::Value;

@@ -99,7 +99,7 @@ pub fn eval(
     let mut eval_log = EvalLogBuilder::default();
     let mut cycle_tracker = Vec::<String>::default();
     if eval_log_enabled!() {
-        eval_log.append(format!("Evaluation '{key}'").as_str());
+        eval_log.append(format!("Evaluating '{key}'").as_str());
         if let Some(user) = user {
             eval_log.append(format!(" for User '{user}'").as_str());
         }
@@ -561,7 +561,7 @@ fn eval_segment_cond(
             }
             log.append(format!("{user_condition}").as_str());
         }
-        result = eval_user_cond(user_condition, key, user, salt, &segment.name);
+        result = eval_user_cond(user_condition, key, user, salt, segment.name.as_str());
         if eval_log_enabled!() {
             let end = if result.is_match() {
                 ""
@@ -569,7 +569,7 @@ fn eval_segment_cond(
                 ", skipping the remaining AND conditions"
             };
             let match_msg = format!("{}", result.is_match());
-            log.append(" = >")
+            log.append(" => ")
                 .append(match_msg.as_str())
                 .append(end)
                 .dec_indent();
@@ -597,7 +597,7 @@ fn eval_segment_cond(
             log.append(" failed to evaluate.");
         } else {
             let msg = format!("{}", result.is_match() == needs_true);
-            log.append(format!("evaluates to {msg}.").as_str());
+            log.append(format!(" evaluates to {msg}.").as_str());
         }
         log.dec_indent().new_ln(Some(")"));
     }
@@ -845,7 +845,7 @@ fn eval_starts_ends_with(
             } else {
                 return Fatal(SALT_MISSING_MSG.to_owned());
             };
-            let parts = item.split('_').collect::<Vec<&str>>();
+            let parts: Vec<&str> = item.split('_').collect();
             if parts.len() < 2 || parts[1].is_empty() {
                 return Fatal(COMP_VAL_INVALID_MSG.to_owned());
             }
@@ -904,7 +904,7 @@ fn eval_semver_is_one_of(
         if trimmed.is_empty() {
             continue;
         }
-        let comp_ver = if let Ok(ver) = Version::parse(trimmed) {
+        let comp_ver = if let Ok(ver) = utils::parse_semver(trimmed) {
             ver
         } else {
             // NOTE: Previous versions of the evaluation algorithm ignored invalid comparison values.
@@ -923,7 +923,7 @@ fn eval_semver_compare(
     user_val: Version,
     comp: &UserComparator,
 ) -> ConditionResult {
-    let comp_ver = if let Ok(ver) = Version::parse(comp_val) {
+    let comp_ver = if let Ok(ver) = utils::parse_semver(comp_val) {
         ver
     } else {
         // NOTE: Previous versions of the evaluation algorithm ignored invalid comparison values.

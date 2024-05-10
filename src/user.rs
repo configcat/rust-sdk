@@ -1,3 +1,4 @@
+use crate::utils;
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::ser::SerializeSeq;
@@ -9,6 +10,7 @@ pub const IDENTIFIER: &str = "Identifier";
 pub const EMAIL: &str = "Email";
 pub const COUNTRY: &str = "Country";
 
+#[derive(Clone)]
 /// Supported user attribute value types.
 pub enum UserValue {
     /// String user attribute value.
@@ -104,15 +106,15 @@ impl Serialize for UserValue {
 ///     .email("john@example.com")
 ///     .custom("Rating", 4.5)
 ///     .custom("RegisteredAt", DateTime::from_str("2023-06-14T15:27:15.8440000Z").unwrap())
-///     .custom("Roles", vec!["Role1", "Role2"]);
+///     .custom("Roles", vec!["Role1".to_owned(), "Role2".to_owned()]);
 /// ```
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct User {
     attributes: HashMap<String, UserValue>,
 }
 
 impl User {
-    /// Initializes a new [`User`].
+    /// Creates a new [`User`].
     ///
     /// # Examples:
     ///
@@ -127,7 +129,7 @@ impl User {
         }
     }
 
-    /// Email address of the user.
+    /// Sets the email address of the user.
     ///
     /// # Examples:
     ///
@@ -142,7 +144,7 @@ impl User {
         self
     }
 
-    /// Country of the user.
+    /// Sets the country of the user.
     ///
     /// # Examples:
     ///
@@ -157,7 +159,7 @@ impl User {
         self
     }
 
-    /// Custom attribute of the user for advanced targeting rule definitions (e.g. user role, subscription type, etc.)
+    /// Sets a custom attribute of the user for advanced targeting rule definitions (e.g. user role, subscription type, etc.)
     ///
     /// # Examples:
     ///
@@ -222,7 +224,7 @@ impl UserValue {
                     "Infinity" | "+Infinity" => Some(f64::INFINITY),
                     "-Infinity" => Some(f64::NEG_INFINITY),
                     "NaN" => Some(f64::NAN),
-                    _ => match trimmed.parse() {
+                    _ => match trimmed.replace(',', ".").parse() {
                         Ok(num) => Some(num),
                         Err(_) => None,
                     },
@@ -245,7 +247,7 @@ impl UserValue {
     pub(crate) fn as_semver(&self) -> Option<Version> {
         match self {
             UserValue::SemVer(val) => Some(val.clone()),
-            UserValue::String(val) => match Version::parse(val) {
+            UserValue::String(val) => match utils::parse_semver(val) {
                 Ok(version) => Some(version),
                 Err(_) => None,
             },
@@ -270,7 +272,7 @@ impl UserValue {
 
 impl Display for User {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match serde_json::to_string(self) {
+        match serde_json::to_string(&self.attributes) {
             Ok(str) => write!(f, "{str}"),
             Err(_) => f.write_str("<invalid user>"),
         }
@@ -279,15 +281,15 @@ impl Display for User {
 
 impl From<Vec<&str>> for UserValue {
     fn from(value: Vec<&str>) -> Self {
-        let str_vec = value.iter().map(|x| x.to_string()).collect();
+        let str_vec = value.iter().map(|v| v.to_string()).collect();
         Self::StringVec(str_vec)
     }
 }
 
 from_val_to_enum!(UserValue String String);
 from_val_to_enum!(UserValue DateTime DateTime<Utc>);
-from_val_to_enum!(UserValue StringVec Vec<String>);
 from_val_to_enum!(UserValue SemVer Version);
+from_val_to_enum!(UserValue StringVec Vec<String>);
 from_val_to_enum_into!(UserValue Float f64 f32);
 from_val_to_enum_into!(UserValue UInt u8 u16 u32 u64);
 from_val_to_enum_into!(UserValue Int i8 i16 i32 i64);

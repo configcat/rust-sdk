@@ -1,14 +1,38 @@
 use std::fmt::{Display, Formatter};
 
+/// Represents the value of a feature flag or setting.
+///
+/// # Examples
+///
+/// ```rust
+/// use configcat::Value;
+///
+/// let bool_val = Value::Bool(true);
+/// let int_val = Value::Int(42);
+/// ```
 #[derive(PartialEq, Debug)]
 pub enum Value {
+    /// A bool feature flag's value.
     Bool(bool),
+    /// A whole number setting's value.
     Int(i64),
+    /// A decimal number setting's value.
     Float(f64),
+    /// A text setting's value.
     String(String),
 }
 
 impl Value {
+    /// Reads the value as `bool`. Returns [`None`] if it's not a [`Value::Bool`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use configcat::Value;
+    ///
+    /// let value = Value::Bool(true);
+    /// assert!(value.as_bool().unwrap());
+    /// ```
     pub fn as_bool(&self) -> Option<bool> {
         if let Value::Bool(val) = self {
             return Some(*val);
@@ -16,6 +40,16 @@ impl Value {
         None
     }
 
+    /// Reads the value as `i64`. Returns [`None`] if it's not a [`Value::Int`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use configcat::Value;
+    ///
+    /// let value = Value::Int(42);
+    /// assert_eq!(value.as_int().unwrap(), 42);
+    /// ```
     pub fn as_int(&self) -> Option<i64> {
         if let Value::Int(val) = self {
             return Some(*val);
@@ -23,6 +57,16 @@ impl Value {
         None
     }
 
+    /// Reads the value as `f64`. Returns [`None`] if it's not a [`Value::Float`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use configcat::Value;
+    ///
+    /// let value = Value::Float(3.14);
+    /// assert_eq!(value.as_float().unwrap(), 3.14);
+    /// ```
     pub fn as_float(&self) -> Option<f64> {
         if let Value::Float(val) = self {
             return Some(*val);
@@ -30,6 +74,16 @@ impl Value {
         None
     }
 
+    /// Reads the value as [`String`]. Returns [`None`] if it's not a [`Value::String`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use configcat::Value;
+    ///
+    /// let value = Value::String("foo".to_owned());
+    /// assert_eq!(value.as_str().unwrap(), "foo".to_owned());
+    /// ```
     pub fn as_str(&self) -> Option<String> {
         if let Value::String(val) = self {
             return Some(val.clone());

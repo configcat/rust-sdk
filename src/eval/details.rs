@@ -1,10 +1,26 @@
 use crate::eval::evaluator::EvalResult;
-use crate::fetch::service::ConfigResult;
 use crate::{ClientError, PercentageOption, TargetingRule, User};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 /// Details of the flag evaluation's result.
+///
+/// # Examples
+///
+/// ```no_run
+/// use configcat::{Client, User};
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let client = Client::new("SDK_KEY").unwrap();
+///
+///     let user = User::new("user-id");
+///     let details = client.get_bool_details("flag-key", Some(user), false).await;
+///     
+///     let flag_val = details.value;
+///     let fetch_time = details.fetch_time.unwrap();
+/// }
+/// ```
 #[derive(Default)]
 pub struct EvaluationDetails<T> {
     pub value: T,
@@ -18,7 +34,7 @@ pub struct EvaluationDetails<T> {
     pub user: Option<User>,
     /// Error in case evaluation failed.
     pub error: Option<ClientError>,
-    /// Time of last successful config download.
+    /// Time of last successful config download on which the evaluation was based.
     pub fetch_time: Option<DateTime<Utc>>,
     /// The targeting rule (if any) that matched during the evaluation and was used to return the evaluated value.
     pub matched_targeting_rule: Option<Arc<TargetingRule>>,
@@ -37,13 +53,14 @@ impl<T: Default> EvaluationDetails<T> {
             ..EvaluationDetails::default()
         }
     }
+}
 
-    pub(crate) fn from_results(eval_result: EvalResult, config_result: &ConfigResult) -> Self {
-        Self {
-            variation_id: eval_result.variation_id,
-            fetch_time: Some(*config_result.fetch_time()),
-            matched_targeting_rule: eval_result.rule,
-            matched_percentage_option: eval_result.option,
+impl<T: Default> From<EvalResult> for EvaluationDetails<T> {
+    fn from(value: EvalResult) -> Self {
+        EvaluationDetails {
+            variation_id: value.variation_id,
+            matched_targeting_rule: value.rule,
+            matched_percentage_option: value.option,
             ..EvaluationDetails::default()
         }
     }
