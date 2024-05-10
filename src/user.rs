@@ -173,16 +173,15 @@ impl User {
     ///     .custom("Roles", vec!["Role1", "Role2"]);
     /// ```
     pub fn custom<T: Into<UserValue>>(mut self, key: &str, value: T) -> Self {
-        let k = key.to_owned();
-        if k == IDENTIFIER || k == EMAIL || k == COUNTRY {
+        if key == IDENTIFIER || key == EMAIL || key == COUNTRY {
             return self;
         }
-        self.attributes.insert(k, value.into());
+        self.attributes.insert(key.to_owned(), value.into());
         self
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<&UserValue> {
-        self.attributes.get(&key.to_owned())
+        self.attributes.get(key)
     }
 }
 

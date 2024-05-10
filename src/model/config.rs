@@ -128,7 +128,7 @@ fn post_process(config: &mut Config) {
         None => None,
     };
     for (_, value) in config.settings.iter_mut() {
-        value.salt = config.salt.clone();
+        value.salt.clone_from(&config.salt);
 
         if let Some(rules) = value.targeting_rules.as_mut() {
             for rule in rules {
