@@ -1,3 +1,5 @@
+#[macro_use]
+mod macros;
 mod cache;
 mod client;
 mod constants;
@@ -7,8 +9,10 @@ mod fetch;
 mod model;
 mod modes;
 mod options;
+mod r#override;
 mod user;
 mod utils;
+mod value;
 
 pub use cache::ConfigCache;
 pub use client::Client;
@@ -22,4 +26,5 @@ pub use model::enums::{
 };
 pub use modes::PollingMode;
 pub use options::{Options, OptionsBuilder};
+pub use r#override::behavior::OverrideBehavior;
 pub use user::{User, UserValue};

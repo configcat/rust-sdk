@@ -1,24 +1,25 @@
 use crate::cache::EmptyConfigCache;
-use crate::errors::ClientError;
+use crate::constants::SDK_KEY_PROXY_PREFIX;
+use crate::errors::{ClientError, ErrorKind};
 use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
-use crate::ConfigCache;
+use crate::{Client, ConfigCache};
 use std::borrow::Borrow;
 use std::time::Duration;
 
-/// Configuration options for the ConfigCat [`crate::Client`].
+/// Configuration options for the ConfigCat [`Client`].
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```no_run
 /// use std::time::Duration;
-/// use configcat::{DataGovernance, OptionsBuilder, PollingMode};
+/// use configcat::{DataGovernance, Client, PollingMode};
 ///
-/// let builder = OptionsBuilder::new("SDK_KEY")
+/// let builder = Client::builder("SDK_KEY")
 ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
 ///     .data_governance(DataGovernance::EU);
 ///
-/// let options = builder.build().unwrap();
+/// let client = builder.build().unwrap();
 /// ```
 pub struct Options {
     sdk_key: String,
@@ -67,19 +68,19 @@ impl Options {
     }
 }
 
-/// Builder to create [`Options`] used by the ConfigCat [`crate::Client`].
+/// Builder to create [`Options`] used by the ConfigCat [`Client`].
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```no_run
 /// use std::time::Duration;
-/// use configcat::{DataGovernance, OptionsBuilder, PollingMode};
+/// use configcat::{DataGovernance, Client, PollingMode};
 ///
-/// let builder = OptionsBuilder::new("SDK_KEY")
+/// let builder = Client::builder("SDK_KEY")
 ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
 ///     .data_governance(DataGovernance::EU);
 ///
-/// let options = builder.build().unwrap();
+/// let client = builder.build().unwrap();
 /// ```
 pub struct OptionsBuilder {
     sdk_key: String,
@@ -92,16 +93,10 @@ pub struct OptionsBuilder {
 }
 
 impl OptionsBuilder {
-    /// Create a new [`OptionsBuilder`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use configcat::OptionsBuilder;
-    ///
-    /// let builder = OptionsBuilder::new("SDK_KEY");
-    /// ```
-    pub fn new(sdk_key: &str) -> Self {
+    const SDK_KEY_PREFIX: &'static str = "configcat-sdk-1";
+    const SDK_KEY_SECTION_LENGTH: usize = 22;
+
+    pub(crate) fn new(sdk_key: &str) -> Self {
         Self {
             sdk_key: sdk_key.to_owned(),
             offline: false,
@@ -119,9 +114,9 @@ impl OptionsBuilder {
     /// # Examples
     ///
     /// ```rust
-    /// use configcat::OptionsBuilder;
+    /// use configcat::Client;
     ///
-    /// let builder = OptionsBuilder::new("SDK_KEY")
+    /// let builder = Client::builder("SDK_KEY")
     ///     .offline(true);
     /// ```
     pub fn offline(mut self, offline: bool) -> Self {
@@ -136,9 +131,9 @@ impl OptionsBuilder {
     ///
     /// ```rust
     /// use std::time::Duration;
-    /// use configcat::OptionsBuilder;
+    /// use configcat::Client;
     ///
-    /// let builder = OptionsBuilder::new("SDK_KEY")
+    /// let builder = Client::builder("SDK_KEY")
     ///     .http_timeout(Duration::from_secs(60));
     /// ```
     pub fn http_timeout(mut self, timeout: Duration) -> Self {
@@ -151,9 +146,9 @@ impl OptionsBuilder {
     /// # Examples
     ///
     /// ```rust
-    /// use configcat::OptionsBuilder;
+    /// use configcat::Client;
     ///
-    /// let builder = OptionsBuilder::new("SDK_KEY")
+    /// let builder = Client::builder("SDK_KEY")
     ///     .base_url("https://custom-cdn-url.com");
     /// ```
     pub fn base_url(mut self, base_url: &str) -> Self {
@@ -167,9 +162,9 @@ impl OptionsBuilder {
     /// # Examples
     ///
     /// ```rust
-    /// use configcat::{DataGovernance, OptionsBuilder};
+    /// use configcat::{DataGovernance, Client};
     ///
-    /// let builder = OptionsBuilder::new("SDK_KEY")
+    /// let builder = Client::builder("SDK_KEY")
     ///     .data_governance(DataGovernance::EU);
     /// ```
     pub fn data_governance(mut self, data_governance: DataGovernance) -> Self {
@@ -182,9 +177,9 @@ impl OptionsBuilder {
     /// # Examples
     ///
     /// ```rust
-    /// use configcat::{ConfigCache, OptionsBuilder};
+    /// use configcat::{ConfigCache, Client};
     ///
-    /// let builder = OptionsBuilder::new("SDK_KEY")
+    /// let builder = Client::builder("SDK_KEY")
     ///     .cache(Box::new(CustomCache{}));
     ///
     /// struct CustomCache {}
@@ -212,9 +207,9 @@ impl OptionsBuilder {
     ///
     /// ```rust
     /// use std::time::Duration;
-    /// use configcat::{OptionsBuilder, PollingMode};
+    /// use configcat::{Client, PollingMode};
     ///
-    /// let builder = OptionsBuilder::new("SDK_KEY")
+    /// let builder = Client::builder("SDK_KEY")
     ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)));
     /// ```
     pub fn polling_mode(mut self, polling_mode: PollingMode) -> Self {
@@ -222,19 +217,43 @@ impl OptionsBuilder {
         self
     }
 
-    /// Create the [`Options`] from the configuration made on the builder.
+    /// Create the [`Client`] from the configuration made on the builder.
     ///
     /// # Errors
     ///
     /// This method fails if the given SDK key has an invalid format.
-    pub fn build(self) -> Result<Options, ClientError> {
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use configcat::{DataGovernance, Client, PollingMode};
+    ///
+    /// let builder = Client::builder("SDK_KEY")
+    ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
+    ///     .data_governance(DataGovernance::EU);
+    ///
+    /// let client = builder.build().unwrap();
+    /// ```
+    pub fn build(self) -> Result<Client, ClientError> {
         if self.sdk_key.is_empty() {
-            return Err(ClientError::InvalidSdkKey(
+            return Err(ClientError::new(
+                ErrorKind::InvalidSdkKey,
                 "SDK Key cannot be empty".to_owned(),
             ));
         }
-        Ok(Options {
-            sdk_key: self.sdk_key.clone(),
+        if !self.is_sdk_key_valid(self.sdk_key.as_str(), self.base_url.is_some()) {
+            return Err(ClientError::new(
+                ErrorKind::InvalidSdkKey,
+                format!("SDK Key '{}' is invalid.", self.sdk_key),
+            ));
+        }
+        Ok(Client::with_options(self.build_options()))
+    }
+
+    pub(crate) fn build_options(self) -> Options {
+        Options {
+            sdk_key: self.sdk_key,
             offline: self.offline,
             cache: self.cache.unwrap_or(Box::new(EmptyConfigCache::new())),
             polling_mode: self
@@ -243,6 +262,28 @@ impl OptionsBuilder {
             base_url: self.base_url,
             data_governance: self.data_governance.unwrap_or(DataGovernance::Global),
             http_timeout: self.http_timeout.unwrap_or(Duration::from_secs(30)),
-        })
+        }
+    }
+
+    fn is_sdk_key_valid(&self, sdk_key: &str, is_custom_url: bool) -> bool {
+        if is_custom_url
+            && sdk_key.len() > SDK_KEY_PROXY_PREFIX.len()
+            && sdk_key.starts_with(SDK_KEY_PROXY_PREFIX)
+        {
+            return true;
+        }
+        let comps = sdk_key.split('/').collect::<Vec<&str>>();
+        match comps.len() {
+            2 => {
+                comps[0].len() == Self::SDK_KEY_SECTION_LENGTH
+                    && comps[1].len() == Self::SDK_KEY_SECTION_LENGTH
+            }
+            3 => {
+                comps[0] == Self::SDK_KEY_PREFIX
+                    && comps[1].len() == Self::SDK_KEY_SECTION_LENGTH
+                    && comps[2].len() == Self::SDK_KEY_SECTION_LENGTH
+            }
+            _ => false,
+        }
     }
 }

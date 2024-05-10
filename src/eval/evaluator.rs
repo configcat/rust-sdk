@@ -1,13 +1,13 @@
 use crate::eval::evaluator::ConditionResult::*;
-use crate::eval::evaluator::EvalResult::*;
 use crate::eval::log_builder::EvalLogBuilder;
+use crate::value::{OptionalValueDisplay, Value};
 use crate::UserComparator::*;
 use crate::{
     utils, Condition, PercentageOption, PrerequisiteFlagComparator, PrerequisiteFlagCondition,
-    SegmentComparator, SegmentComparator::*, SegmentCondition, ServedValue, Setting, SettingValue,
+    SegmentComparator::*, SegmentCondition, ServedValue, Setting, SettingType, SettingValue,
     TargetingRule, User, UserComparator, UserCondition,
 };
-use log::{log_enabled, warn};
+use log::{info, log_enabled, warn};
 use semver::Version;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -22,21 +22,26 @@ macro_rules! eval_log_enabled {
 const RULE_IGNORED_MSG: &str =
     "The current targeting rule is ignored and the evaluation continues with the next rule.";
 const SALT_MISSING_MSG: &str = "Config JSON salt is missing";
-const INVALID_VALUE_TXT: &str = "<invalid value>";
 const COMP_VAL_INVALID_MSG: &str = "Comparison value is missing or invalid";
+const SETTING_VAL_INVALID_MSG: &str = "Setting value is missing or invalid";
+const IDENTIFIER_ATTR: &str = "Identifier";
 
-pub enum EvalResult {
-    Success(
-        SettingValue,
-        Option<String>,
-        Option<Arc<TargetingRule>>,
-        Option<Arc<PercentageOption>>,
-    ),
-    Error(String),
+pub struct EvalResult {
+    pub value: Value,
+    pub variation_id: Option<String>,
+    pub rule: Option<Arc<TargetingRule>>,
+    pub option: Option<Arc<PercentageOption>>,
+    pub setting_type: SettingType,
+}
+
+pub enum PercentageResult {
+    Success(Arc<PercentageOption>),
+    UserAttrMissing(String),
+    Fatal(String),
 }
 
 pub enum ConditionResult {
-    Done(bool),
+    Success(bool),
     NoUser,
     AttrMissing(String, String),
     AttrInvalid(String, String, String),
@@ -47,13 +52,13 @@ pub enum ConditionResult {
 impl ConditionResult {
     fn is_match(&self) -> bool {
         match self {
-            Done(matched) => *matched,
+            Success(matched) => *matched,
             _ => false,
         }
     }
 
-    fn is_ok(&self) -> bool {
-        matches!(self, Done(_))
+    fn is_success(&self) -> bool {
+        matches!(self, Success(_))
     }
 
     fn is_attr_miss(&self) -> bool {
@@ -64,7 +69,7 @@ impl ConditionResult {
 impl Display for ConditionResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Done(_) => f.write_str(""),
+            Success(_) => f.write_str(""),
             NoUser => f.write_str("cannot evaluate, User Object is missing"),
             AttrMissing(attr, _) => {
                 write!(f, "cannot evaluate, the User.{attr} attribute is missing")
@@ -84,15 +89,286 @@ impl Display for ConditionResult {
     }
 }
 
+pub fn eval(
+    setting: &Setting,
+    key: &str,
+    user: &Option<User>,
+    settings: &HashMap<String, Setting>,
+    default: &Option<Value>,
+) -> Result<EvalResult, String> {
+    let mut eval_log = EvalLogBuilder::default();
+    let mut cycle_tracker = Vec::<String>::default();
+    if eval_log_enabled!() {
+        eval_log.append(format!("Evaluation '{key}'").as_str());
+        if let Some(user) = user {
+            eval_log.append(format!(" for User '{user}'").as_str());
+        }
+        eval_log.inc_indent();
+    }
+    let result = eval_setting(
+        setting,
+        key,
+        user,
+        settings,
+        &mut eval_log,
+        &mut cycle_tracker,
+    );
+    if eval_log_enabled!() {
+        if let Ok(res) = &result {
+            eval_log.new_ln(Some(format!("Returning '{}'.", res.value).as_str()));
+        } else {
+            eval_log
+                .reset_indent()
+                .inc_indent()
+                .new_ln(Some(format!("Returning '{}'.", default.to_str()).as_str()));
+        }
+        eval_log.dec_indent();
+        info!(event_id = 5000; "{}", eval_log.content());
+    }
+    result
+}
+
 fn eval_setting(
     setting: &Setting,
     key: &str,
     user: &Option<User>,
-    log: &mut EvalLogBuilder,
     settings: &HashMap<String, Setting>,
+    log: &mut EvalLogBuilder,
     cycle_tracker: &mut Vec<String>,
-) -> EvalResult {
-    Error("".to_owned())
+) -> Result<EvalResult, String> {
+    let mut user_missing_logged = false;
+    if let Some(targeting_rules) = setting.targeting_rules.as_ref() {
+        if eval_log_enabled!() {
+            log.new_ln(Some(
+                "Evaluating targeting rules and applying the first match if any:",
+            ));
+        }
+        for rule in targeting_rules {
+            if let Some(conditions) = rule.conditions.as_ref() {
+                let result = eval_conditions(
+                    conditions,
+                    &rule.served_value,
+                    key,
+                    user,
+                    &setting.salt,
+                    key,
+                    log,
+                    settings,
+                    cycle_tracker,
+                );
+                if eval_log_enabled!() && !result.is_success() {
+                    log.inc_indent().new_ln(Some(RULE_IGNORED_MSG)).dec_indent();
+                }
+                match result {
+                    Success(true) => {
+                        if let Some(served_val) = rule.served_value.as_ref() {
+                            return produce_result(
+                                &served_val.value,
+                                &setting.setting_type,
+                                &served_val.variation_id,
+                                Some(rule.clone()),
+                                None,
+                            );
+                        }
+                        if eval_log_enabled!() && !result.is_success() {
+                            log.inc_indent();
+                        }
+                        match rule.percentage_options.as_ref() {
+                            Some(percentage_opts) => match user {
+                                Some(u) => {
+                                    let percentage_result = eval_percentage(
+                                        percentage_opts,
+                                        u,
+                                        key,
+                                        &setting.percentage_attribute,
+                                        log,
+                                    );
+                                    match percentage_result {
+                                        PercentageResult::Success(opt) => {
+                                            if eval_log_enabled!() && !result.is_success() {
+                                                log.dec_indent();
+                                            }
+                                            return produce_result(
+                                                &opt.served_value,
+                                                &setting.setting_type,
+                                                &opt.variation_id,
+                                                Some(rule.clone()),
+                                                Some(opt.clone()),
+                                            );
+                                        }
+                                        PercentageResult::UserAttrMissing(attr) => {
+                                            log_attr_missing_percentage(key, attr.as_str())
+                                        }
+                                        PercentageResult::Fatal(err) => return Err(err),
+                                    }
+                                }
+                                None => {
+                                    if !user_missing_logged {
+                                        user_missing_logged = true;
+                                        log_user_missing(key);
+                                    }
+                                    if eval_log_enabled!() && !result.is_success() {
+                                        log.new_ln(Some("Skipping % options because the User Object is missing."));
+                                    }
+                                }
+                            },
+                            None => {
+                                return Err(
+                                    "Targeting rule THEN part is missing or invalid".to_owned()
+                                )
+                            }
+                        }
+                        if eval_log_enabled!() && !result.is_success() {
+                            log.new_ln(Some(RULE_IGNORED_MSG)).dec_indent();
+                        }
+                    }
+                    Success(false) => continue,
+                    Fatal(err) => return Err(err),
+                    NoUser => {
+                        if !user_missing_logged {
+                            user_missing_logged = true;
+                            log_user_missing(key);
+                        }
+                        continue;
+                    }
+                    AttrMissing(attr, cond_str) => {
+                        log_attr_missing(key, attr.as_str(), cond_str.as_str());
+                        continue;
+                    }
+                    AttrInvalid(reason, attr, cond_str) => {
+                        log_attr_invalid(key, attr.as_str(), reason.as_str(), cond_str.as_str());
+                        continue;
+                    }
+                    CompValInvalid(error) => {
+                        return match error {
+                            None => Err("Comparison value is missing or invalid".to_owned()),
+                            Some(err) => Err(err),
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(percentage_opts) = setting.percentage_options.as_ref() {
+        match user {
+            Some(u) => {
+                let percentage_result =
+                    eval_percentage(percentage_opts, u, key, &setting.percentage_attribute, log);
+                match percentage_result {
+                    PercentageResult::Success(opt) => {
+                        return produce_result(
+                            &opt.served_value,
+                            &setting.setting_type,
+                            &opt.variation_id,
+                            None,
+                            Some(opt.clone()),
+                        );
+                    }
+                    PercentageResult::UserAttrMissing(attr) => {
+                        log_attr_missing_percentage(key, attr.as_str())
+                    }
+                    PercentageResult::Fatal(err) => return Err(err),
+                }
+            }
+            None => {
+                if !user_missing_logged {
+                    log_user_missing(key);
+                }
+                if eval_log_enabled!() {
+                    log.new_ln(Some(
+                        "Skipping % options because the User Object is missing.",
+                    ));
+                }
+            }
+        }
+    }
+    produce_result(
+        &setting.value,
+        &setting.setting_type,
+        &setting.variation_id,
+        None,
+        None,
+    )
+}
+
+fn produce_result(
+    sv: &SettingValue,
+    setting_type: &SettingType,
+    variation: &Option<String>,
+    rule: Option<Arc<TargetingRule>>,
+    option: Option<Arc<PercentageOption>>,
+) -> Result<EvalResult, String> {
+    if let Some(value) = sv.as_val(setting_type) {
+        return Ok(EvalResult {
+            value,
+            rule,
+            option,
+            variation_id: variation.clone(),
+            setting_type: setting_type.clone(),
+        });
+    }
+    Err(SETTING_VAL_INVALID_MSG.to_owned())
+}
+
+fn eval_percentage(
+    opts: &[Arc<PercentageOption>],
+    user: &User,
+    key: &str,
+    percentage_attr: &Option<String>,
+    log: &mut EvalLogBuilder,
+) -> PercentageResult {
+    let attr = if let Some(percentage_attr) = percentage_attr {
+        percentage_attr
+    } else {
+        IDENTIFIER_ATTR
+    };
+    let user_attr = if let Some(user_attr) = user.get(attr) {
+        user_attr
+    } else {
+        if eval_log_enabled!() {
+            log.new_ln(Some(
+                format!("Skipping % options because the User.{attr} attribute is missing.")
+                    .as_str(),
+            ));
+        }
+        return PercentageResult::UserAttrMissing(attr.to_owned());
+    };
+    if eval_log_enabled!() {
+        log.new_ln(Some(
+            format!("Evaluating % options based on the User.{attr} attribute:").as_str(),
+        ));
+    }
+    let (str_attr_val, _) = user_attr.as_str();
+    let mut hash_candidate = String::with_capacity(key.len() + str_attr_val.len());
+    hash_candidate.push_str(key);
+    hash_candidate.push_str(str_attr_val.as_str());
+    let hash = &utils::sha1(hash_candidate.as_str())[..7];
+    if let Ok(num) = i64::from_str_radix(hash, 16) {
+        let scaled = num % 100;
+        if eval_log_enabled!() {
+            log.new_ln(Some(format!("- Computing hash in the [0..99] range from User.{attr} => {scaled} (this value is sticky and consistent across all SDKs)").as_str()));
+        }
+        let mut bucket = 0;
+        for (index, opt) in opts.iter().enumerate() {
+            bucket += opt.percentage;
+            if scaled < bucket {
+                if eval_log_enabled!() {
+                    log.new_ln(Some(
+                        format!(
+                            "- Hash value {scaled} selects % option {} ({}%), '{}'.",
+                            index + 1,
+                            opt.percentage,
+                            opt.served_value
+                        )
+                        .as_str(),
+                    ));
+                }
+                return PercentageResult::Success(opt.clone());
+            }
+        }
+    }
+    PercentageResult::Fatal("Sum of percentage option percentages is less than 100".to_owned())
 }
 
 fn eval_conditions(
@@ -141,7 +417,7 @@ fn eval_conditions(
                 cond_result = NoUser;
             }
             new_line_before_then =
-                cond_result.is_ok() || cond_result.is_attr_miss() || conditions.len() > 1;
+                cond_result.is_success() || cond_result.is_attr_miss() || conditions.len() > 1;
         } else if let Some(prerequisite_condition) = condition.prerequisite_flag_condition.as_ref()
         {
             cond_result = eval_prerequisite_cond(
@@ -156,11 +432,7 @@ fn eval_conditions(
         }
         if eval_log_enabled!() {
             if conditions.len() > 1 {
-                let res_msg = if cond_result.is_match() {
-                    "true"
-                } else {
-                    "false"
-                };
+                let res_msg = format!("{}", cond_result.is_match());
                 let conclusion = if cond_result.is_match() {
                     ""
                 } else {
@@ -171,7 +443,7 @@ fn eval_conditions(
             log.dec_indent();
         }
         let matched = match cond_result {
-            Done(is_match) => is_match,
+            Success(is_match) => is_match,
             _ => false,
         };
         if !matched {
@@ -182,9 +454,9 @@ fn eval_conditions(
         }
     }
     if eval_log_enabled!() {
-        log.append_then_clause(new_line_before_then, &Done(true), rule_srv_value);
+        log.append_then_clause(new_line_before_then, &Success(true), rule_srv_value);
     }
-    Done(true)
+    Success(true)
 }
 
 fn eval_prerequisite_cond(
@@ -203,12 +475,14 @@ fn eval_prerequisite_cond(
     } else {
         return Fatal("Prerequisite flag is missing".to_owned());
     };
-    if !cond.flag_value.is_valid(&prerequisite.setting_type) {
+    let checked = if let Some(checked) = cond.flag_value.as_val(&prerequisite.setting_type) {
+        checked
+    } else {
         return Fatal(format!(
             "Type mismatch between comparison value '{}' and prerequisite flag '{}'",
             cond.flag_value, cond.flag_key
         ));
-    }
+    };
 
     cycle_tracker.push(key.to_owned());
     if cycle_tracker.contains(&cond.flag_key) {
@@ -232,26 +506,26 @@ fn eval_prerequisite_cond(
         prerequisite,
         cond.flag_key.as_str(),
         user,
-        log,
         settings,
+        log,
         cycle_tracker,
     );
     cycle_tracker.pop();
 
     match result {
-        Success(sv, _, _, _) => {
-            let matched = needs_true == cond.flag_value.eq_by_type(&sv, &prerequisite.setting_type);
+        Ok(result) => {
+            let matched = needs_true == (result.value == checked);
             if eval_log_enabled!() {
-                let msg = if matched { "true" } else { "false" };
+                let msg = format!("{matched}");
                 log.new_ln(Some(
                     format!("Condition ({cond}) evaluates to {msg}.").as_str(),
                 ))
                 .dec_indent()
                 .new_ln(Some(")"));
             }
-            Done(matched)
+            Success(matched)
         }
-        Error(err) => Fatal(err),
+        Err(err) => Fatal(err),
     }
 }
 
@@ -294,19 +568,19 @@ fn eval_segment_cond(
             } else {
                 ", skipping the remaining AND conditions"
             };
-            let match_msg = if result.is_match() { "true" } else { "false" };
+            let match_msg = format!("{}", result.is_match());
             log.append(" = >")
-                .append(match_msg)
+                .append(match_msg.as_str())
                 .append(end)
                 .dec_indent();
         }
-        if !result.is_ok() || !result.is_match() {
+        if !result.is_success() || !result.is_match() {
             break;
         }
     }
     if eval_log_enabled!() {
         log.new_ln(Some("Segment evaluation result: "));
-        if result.is_ok() {
+        if result.is_success() {
             let msg = if result.is_match() {
                 format!("{}", IsIn)
             } else {
@@ -319,20 +593,16 @@ fn eval_segment_cond(
         log.new_ln(Some("Condition ("))
             .append(format!("{cond}").as_str())
             .append(")");
-        if !result.is_ok() {
+        if !result.is_success() {
             log.append(" failed to evaluate.");
         } else {
-            let msg = if result.is_match() == needs_true {
-                "true"
-            } else {
-                "false"
-            };
+            let msg = format!("{}", result.is_match() == needs_true);
             log.append(format!("evaluates to {msg}.").as_str());
         }
         log.dec_indent().new_ln(Some(")"));
     }
     match result {
-        Done(matched) => Done(matched == needs_true),
+        Success(matched) => Success(matched == needs_true),
         _ => result,
     }
 }
@@ -440,7 +710,7 @@ fn eval_user_cond(
             eval_semver_compare(comp_val, user_val, &cond.comparator)
         }
         EqNum | NotEqNum | GreaterNum | GreaterEqNum | LessNum | LessEqNum => {
-            let comp_val = if let Some(comp_val) = cond.double_val.as_ref() {
+            let comp_val = if let Some(comp_val) = cond.float_val.as_ref() {
                 comp_val
             } else {
                 return CompValInvalid(None);
@@ -457,7 +727,7 @@ fn eval_user_cond(
             eval_number_compare(comp_val, &user_val, &cond.comparator)
         }
         BeforeDateTime | AfterDateTime => {
-            let comp_val = if let Some(comp_val) = cond.double_val.as_ref() {
+            let comp_val = if let Some(comp_val) = cond.float_val.as_ref() {
                 comp_val
             } else {
                 return CompValInvalid(None);
@@ -516,7 +786,7 @@ fn eval_text_eq(
         };
         usr_v = utils::sha256(usr_v.as_str(), st.as_str(), ctx_salt);
     }
-    Done((comp_val == usr_v) == needs_true)
+    Success((comp_val == usr_v) == needs_true)
 }
 
 fn eval_one_of(
@@ -542,10 +812,10 @@ fn eval_one_of(
     }
     for item in comp_val.iter() {
         if *item == usr_v {
-            return Done(needs_true);
+            return Success(needs_true);
         }
     }
-    Done(!needs_true)
+    Success(!needs_true)
 }
 
 fn eval_starts_ends_with(
@@ -590,12 +860,12 @@ fn eval_starts_ends_with(
             if comp.is_starts_with() {
                 let chunk = &user_val_ref[..length];
                 if utils::sha256(chunk, st, ctx_salt) == parts[1] {
-                    return Done(needs_true);
+                    return Success(needs_true);
                 }
             } else {
                 let chunk = &user_val_ref[(user_val_len - length)..];
                 if utils::sha256(chunk, st, ctx_salt) == parts[1] {
-                    return Done(needs_true);
+                    return Success(needs_true);
                 }
             }
         } else {
@@ -605,21 +875,21 @@ fn eval_starts_ends_with(
                 user_val.ends_with(item.as_str())
             };
             if condition {
-                return Done(needs_true);
+                return Success(needs_true);
             }
         }
     }
-    Done(!needs_true)
+    Success(!needs_true)
 }
 
 fn eval_contains(comp_val: &[String], user_val: String, comp: &UserComparator) -> ConditionResult {
     let needs_true = *comp == Contains;
     for item in comp_val.iter() {
         if user_val.contains(item) {
-            return Done(needs_true);
+            return Success(needs_true);
         }
     }
-    Done(!needs_true)
+    Success(!needs_true)
 }
 
 fn eval_semver_is_one_of(
@@ -639,13 +909,13 @@ fn eval_semver_is_one_of(
         } else {
             // NOTE: Previous versions of the evaluation algorithm ignored invalid comparison values.
             // We keep this behavior for backward compatibility.
-            return Done(false);
+            return Success(false);
         };
         if user_val.eq(&comp_ver) {
             matched = true;
         }
     }
-    Done(matched == needs_true)
+    Success(matched == needs_true)
 }
 
 fn eval_semver_compare(
@@ -658,33 +928,33 @@ fn eval_semver_compare(
     } else {
         // NOTE: Previous versions of the evaluation algorithm ignored invalid comparison values.
         // We keep this behavior for backward compatibility.
-        return Done(false);
+        return Success(false);
     };
     match comp {
-        GreaterSemver => Done(user_val.gt(&comp_ver)),
-        GreaterEqSemver => Done(user_val.ge(&comp_ver)),
-        LessSemver => Done(user_val.lt(&comp_ver)),
-        LessEqSemver => Done(user_val.le(&comp_ver)),
+        GreaterSemver => Success(user_val.gt(&comp_ver)),
+        GreaterEqSemver => Success(user_val.ge(&comp_ver)),
+        LessSemver => Success(user_val.lt(&comp_ver)),
+        LessEqSemver => Success(user_val.le(&comp_ver)),
         _ => Fatal("wrong semver comparator".to_owned()),
     }
 }
 
 fn eval_number_compare(comp_val: &f64, user_val: &f64, comp: &UserComparator) -> ConditionResult {
     match comp {
-        EqNum => Done(user_val == comp_val),
-        NotEqNum => Done(user_val != comp_val),
-        GreaterNum => Done(user_val > comp_val),
-        GreaterEqNum => Done(user_val >= comp_val),
-        LessNum => Done(user_val < comp_val),
-        LessEqNum => Done(user_val <= comp_val),
+        EqNum => Success(user_val == comp_val),
+        NotEqNum => Success(user_val != comp_val),
+        GreaterNum => Success(user_val > comp_val),
+        GreaterEqNum => Success(user_val >= comp_val),
+        LessNum => Success(user_val < comp_val),
+        LessEqNum => Success(user_val <= comp_val),
         _ => Fatal("wrong number comparator".to_owned()),
     }
 }
 
 fn eval_date(comp_val: &f64, user_val: &f64, comp: &UserComparator) -> ConditionResult {
     match comp {
-        BeforeDateTime => Done(user_val < comp_val),
-        _ => Done(user_val > comp_val),
+        BeforeDateTime => Success(user_val < comp_val),
+        _ => Success(user_val > comp_val),
     }
 }
 
@@ -710,17 +980,33 @@ fn eval_array_contains(
             let user_hashed = utils::sha256(user_item.as_str(), st.as_str(), ctx_salt);
             for comp_item in comp_val.iter() {
                 if user_hashed == *comp_item {
-                    return Done(needs_true);
+                    return Success(needs_true);
                 }
             }
         }
         for comp_item in comp_val.iter() {
             if user_item == comp_item {
-                return Done(needs_true);
+                return Success(needs_true);
             }
         }
     }
-    Done(!needs_true)
+    Success(!needs_true)
+}
+
+fn log_user_missing(key: &str) {
+    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_value()`/`get_value_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+}
+
+fn log_attr_missing(key: &str, attr: &str, cond_str: &str) {
+    warn!(event_id = 3003; "Cannot evaluate condition ({cond_str}) for setting '{key}' (the User.{attr} attribute is missing). You should set the User.{attr} attribute in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+}
+
+fn log_attr_missing_percentage(key: &str, attr: &str) {
+    warn!(event_id = 3003; "Cannot evaluate % options for setting '{key}' (the User.{attr} attribute is missing). You should set the User.{attr} attribute in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+}
+
+fn log_attr_invalid(key: &str, attr: &str, reason: &str, cond_str: &str) {
+    warn!(event_id = 3004; "Cannot evaluate condition ({cond_str}) for setting '{key}' ({reason}). Please check the User.{attr} attribute and make sure that its value corresponds to the comparison operator.")
 }
 
 fn log_conv(cond: &UserCondition, key: &str, attr_val: &str) {

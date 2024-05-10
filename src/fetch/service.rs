@@ -16,16 +16,23 @@ use crate::modes::PollingMode;
 use crate::options::Options;
 use crate::utils::sha1;
 
-pub enum ServiceResult {
+pub enum ConfigResult {
     Ok(Arc<Config>, DateTime<Utc>),
     Failed(ClientError, Arc<Config>, DateTime<Utc>),
 }
 
-impl ServiceResult {
+impl ConfigResult {
     pub fn config(&self) -> &Arc<Config> {
         match self {
-            ServiceResult::Ok(entry, _) => entry,
-            ServiceResult::Failed(_, entry, _) => entry,
+            ConfigResult::Ok(entry, _) => entry,
+            ConfigResult::Failed(_, entry, _) => entry,
+        }
+    }
+
+    pub fn fetch_time(&self) -> &DateTime<Utc> {
+        match self {
+            ConfigResult::Ok(_, time) => time,
+            ConfigResult::Failed(_, _, time) => time,
         }
     }
 }
@@ -57,7 +64,7 @@ impl ConfigService {
     const GLOBAL_CDN_URL: &'static str = "https://cdn-global.configcat.com";
     const EU_CDN_URL: &'static str = "https://cdn-eu.configcat.com";
 
-    pub fn new(opts: &Arc<Options>) -> Self {
+    pub fn new(opts: Arc<Options>) -> Self {
         let service = Self {
             state: Arc::new(ServiceState {
                 cache_key: sha1(
@@ -84,18 +91,20 @@ impl ConfigService {
                 init: Once::new(),
                 cached_entry: Arc::new(tokio::sync::Mutex::new(ConfigEntry::default())),
             }),
-            options: Arc::clone(opts),
+            options: opts,
             cancellation_token: CancellationToken::new(),
             close: Once::new(),
         };
-        match opts.polling_mode() {
-            PollingMode::AutoPoll(interval) if !opts.offline() => service.start_poll(*interval),
+        match service.options.polling_mode() {
+            PollingMode::AutoPoll(interval) if !service.options.offline() => {
+                service.start_poll(*interval)
+            }
             _ => service.state.initialized(),
         }
         service
     }
 
-    pub async fn get_config(&self) -> ServiceResult {
+    pub async fn config(&self) -> ConfigResult {
         let initialized = self.state.initialized.load(Ordering::SeqCst);
         let threshold = match self.options.polling_mode() {
             PollingMode::LazyLoad(cache_ttl) => Utc::now() - *cache_ttl,
@@ -113,8 +122,8 @@ impl ConfigService {
         let result =
             fetch_if_older(&self.state, &self.options, DateTime::<Utc>::MAX_UTC, false).await;
         match result {
-            ServiceResult::Ok(_, _) => Ok(()),
-            ServiceResult::Failed(err, _, _) => Err(err),
+            ConfigResult::Ok(_, _) => Ok(()),
+            ConfigResult::Failed(err, _, _) => Err(err),
         }
     }
 
@@ -152,7 +161,7 @@ async fn fetch_if_older(
     options: &Arc<Options>,
     threshold: DateTime<Utc>,
     prefer_cached: bool,
-) -> ServiceResult {
+) -> ConfigResult {
     let mut entry = state.cached_entry.lock().await;
     let from_cache = read_cache(state, options, &entry.config_json).unwrap_or_default();
 
@@ -162,7 +171,7 @@ async fn fetch_if_older(
 
     if entry.fetch_time > threshold || state.offline.load(Ordering::SeqCst) || prefer_cached {
         state.initialized();
-        return ServiceResult::Ok(entry.config.clone(), entry.fetch_time);
+        return ConfigResult::Ok(entry.config.clone(), entry.fetch_time);
     }
 
     let response = state.fetcher.fetch(&entry.etag).await;
@@ -173,14 +182,14 @@ async fn fetch_if_older(
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
-            ServiceResult::Ok(entry.config.clone(), entry.fetch_time)
+            ConfigResult::Ok(entry.config.clone(), entry.fetch_time)
         }
         FetchResponse::NotModified => {
             *entry = entry.with_time(Utc::now());
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
-            ServiceResult::Ok(entry.config.clone(), entry.fetch_time)
+            ConfigResult::Ok(entry.config.clone(), entry.fetch_time)
         }
         FetchResponse::Failed(err, transient) => {
             if !transient && !entry.is_empty() {
@@ -189,11 +198,7 @@ async fn fetch_if_older(
                     .cache()
                     .write(&state.cache_key, entry.serialize().as_str());
             }
-            ServiceResult::Failed(
-                ClientError::Fetch(err.to_string()),
-                entry.config.clone(),
-                entry.fetch_time,
-            )
+            ConfigResult::Failed(err, entry.config.clone(), entry.fetch_time)
         }
     }
 }
@@ -241,10 +246,9 @@ mod service_tests {
                     "configcat-sdk-1/TEST_KEY-0123456789012/1234567890123456789012",
                 )
                 .polling_mode(PollingMode::Manual)
-                .build()
-                .unwrap(),
+                .build_options(),
             );
-            let service = ConfigService::new(&opts);
+            let service = ConfigService::new(opts);
             assert_eq!(
                 service.state.cache_key.as_str(),
                 "f83ba5d45bceb4bb704410f51b704fb6dfa19942"
@@ -256,10 +260,9 @@ mod service_tests {
                     "configcat-sdk-1/TEST_KEY2-123456789012/1234567890123456789012",
                 )
                 .polling_mode(PollingMode::Manual)
-                .build()
-                .unwrap(),
+                .build_options(),
             );
-            let service = ConfigService::new(&opts);
+            let service = ConfigService::new(opts);
             assert_eq!(
                 service.state.cache_key.as_str(),
                 "da7bfd8662209c8ed3f9db96daed4f8d91ba5876"
@@ -277,15 +280,15 @@ mod service_tests {
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
@@ -304,15 +307,15 @@ mod service_tests {
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
@@ -330,25 +333,25 @@ mod service_tests {
             PollingMode::LazyLoad(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
@@ -367,19 +370,19 @@ mod service_tests {
             PollingMode::LazyLoad(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
@@ -393,30 +396,30 @@ mod service_tests {
         let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
         let opts = create_options(server.url(), PollingMode::Manual, None);
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         assert!(result.config().settings.is_empty());
 
         _ = service.refresh().await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
         _ = service.refresh().await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
         _ = service.refresh().await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
@@ -439,18 +442,18 @@ mod service_tests {
                 "etag1",
             )))),
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        opts.cache().write(
+        service.options.cache().write(
             service.state.clone().cache_key.as_str(),
             construct_cache_payload("test2", Utc::now(), "etag2").as_str(),
         );
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
@@ -472,18 +475,18 @@ mod service_tests {
                 "etag1",
             )))),
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        opts.cache().write(
+        service.options.cache().write(
             service.state.clone().cache_key.as_str(),
             construct_cache_payload("test2", Utc::now(), "etag2").as_str(),
         );
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
 
@@ -501,13 +504,13 @@ mod service_tests {
             PollingMode::AutoPoll(Duration::from_millis(100)),
             Some(Box::new(SingleValueCache::new(String::default()))),
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        let cached = opts.cache().read("").unwrap();
+        let cached = service.options.cache().read("").unwrap();
         let entry = entry_from_cached_json(cached.as_str()).unwrap();
 
         assert_eq!(entry.etag, "etag1");
@@ -529,14 +532,13 @@ mod service_tests {
                 .base_url(server.url().as_str())
                 .polling_mode(PollingMode::AutoPoll(Duration::from_millis(100)))
                 .offline(true)
-                .build()
-                .unwrap(),
+                .build_options(),
         );
-        let service = ConfigService::new(&opts);
+        let service = ConfigService::new(opts);
 
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        let result = service.get_config().await;
+        let result = service.config().await;
         assert!(result.config().settings.is_empty());
 
         m.assert_async().await;
@@ -552,8 +554,7 @@ mod service_tests {
                 .cache(cache.unwrap_or(Box::new(EmptyConfigCache::new())))
                 .base_url(url.as_str())
                 .polling_mode(mode)
-                .build()
-                .unwrap(),
+                .build_options(),
         )
     }
 

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use semver::Version;
-use serde::Serializer;
+use serde::ser::SerializeSeq;
+use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
@@ -36,6 +37,29 @@ impl Display for UserValue {
             UserValue::DateTime(val) => f.write_str(val.to_string().as_str()),
             UserValue::StringVec(_) => f.write_str("<vec of strings>"),
             UserValue::SemVer(val) => f.write_str(val.to_string().as_str()),
+        }
+    }
+}
+
+impl Serialize for UserValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            UserValue::String(val) => serializer.serialize_str(val),
+            UserValue::Int(val) => serializer.serialize_i64(*val),
+            UserValue::UInt(val) => serializer.serialize_u64(*val),
+            UserValue::Float(val) => serializer.serialize_f64(*val),
+            UserValue::DateTime(val) => serializer.serialize_str(val.to_string().as_str()),
+            UserValue::StringVec(val) => {
+                let mut seq = serializer.serialize_seq(Some(val.len()))?;
+                for element in val {
+                    seq.serialize_element(element)?;
+                }
+                seq.end()
+            }
+            UserValue::SemVer(val) => serializer.serialize_str(val.to_string().as_str()),
         }
     }
 }
@@ -82,6 +106,7 @@ impl Display for UserValue {
 ///     .custom("RegisteredAt", DateTime::from_str("2023-06-14T15:27:15.8440000Z").unwrap())
 ///     .custom("Roles", vec!["Role1", "Role2"]);
 /// ```
+#[derive(Serialize)]
 pub struct User {
     attributes: HashMap<String, UserValue>,
 }
@@ -147,7 +172,7 @@ impl User {
     ///     .custom("RegisteredAt", DateTime::from_str("2023-06-14T15:27:15.8440000Z").unwrap())
     ///     .custom("Roles", vec!["Role1", "Role2"]);
     /// ```
-    pub fn custom(mut self, key: &str, value: impl Into<UserValue>) -> Self {
+    pub fn custom<T: Into<UserValue>>(mut self, key: &str, value: T) -> Self {
         let k = key.to_owned();
         if k == IDENTIFIER || k == EMAIL || k == COUNTRY {
             return self;
@@ -244,9 +269,12 @@ impl UserValue {
     }
 }
 
-impl From<&str> for UserValue {
-    fn from(value: &str) -> Self {
-        Self::String(value.to_owned())
+impl Display for User {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match serde_json::to_string(self) {
+            Ok(str) => write!(f, "{str}"),
+            Err(_) => f.write_str("<invalid user>"),
+        }
     }
 }
 
@@ -257,30 +285,11 @@ impl From<Vec<&str>> for UserValue {
     }
 }
 
-macro_rules! from_impl {
-    ($to:ident $($t:ty)*) => ($(
-        impl From<$t> for UserValue {
-            fn from(value: $t) -> Self {
-                Self::$to(value)
-            }
-        }
-    )*)
-}
-
-macro_rules! from_impl_into {
-    ($to:ident $($t:ty)*) => ($(
-        impl From<$t> for UserValue {
-            fn from(value: $t) -> Self {
-                Self::$to(value.into())
-            }
-        }
-    )*)
-}
-
-from_impl!(String String);
-from_impl!(DateTime DateTime<Utc>);
-from_impl!(StringVec Vec<String>);
-from_impl!(SemVer Version);
-from_impl_into!(Float f64 f32);
-from_impl_into!(UInt u8 u16 u32 u64);
-from_impl_into!(Int i8 i16 i32 i64);
+from_val_to_enum!(UserValue String String);
+from_val_to_enum!(UserValue DateTime DateTime<Utc>);
+from_val_to_enum!(UserValue StringVec Vec<String>);
+from_val_to_enum!(UserValue SemVer Version);
+from_val_to_enum_into!(UserValue Float f64 f32);
+from_val_to_enum_into!(UserValue UInt u8 u16 u32 u64);
+from_val_to_enum_into!(UserValue Int i8 i16 i32 i64);
+from_val_to_enum_into!(UserValue String &str);

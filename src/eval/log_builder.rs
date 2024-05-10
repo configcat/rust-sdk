@@ -60,7 +60,7 @@ impl EvalLogBuilder {
             builder.append(" % options");
         }
         return match result {
-            ConditionResult::Done(matched) => {
+            ConditionResult::Success(matched) => {
                 if *matched {
                     builder.append("MATCH, applying rule")
                 } else {

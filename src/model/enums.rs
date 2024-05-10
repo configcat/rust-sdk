@@ -19,7 +19,7 @@ pub enum RedirectMode {
 }
 
 /// The type of a feature flag or setting.
-#[derive(Debug, Deserialize_repr)]
+#[derive(Debug, Clone, Deserialize_repr)]
 #[repr(u8)]
 pub enum SettingType {
     /// The on/off type (feature flag).
@@ -29,7 +29,18 @@ pub enum SettingType {
     /// The whole number setting type.
     Int = 2,
     /// The decimal number setting type.
-    Double = 3,
+    Float = 3,
+}
+
+impl Display for SettingType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SettingType::Bool => f.write_str("Bool"),
+            SettingType::String => f.write_str("String"),
+            SettingType::Int => f.write_str("Int"),
+            SettingType::Float => f.write_str("Float"),
+        }
+    }
 }
 
 /// Segment comparison operator used during the evaluation process.

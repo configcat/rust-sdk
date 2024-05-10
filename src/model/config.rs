@@ -1,13 +1,22 @@
-use crate::errors::InternalError;
 use crate::model::enums::{
     PrerequisiteFlagComparator, RedirectMode, SegmentComparator, SettingType, UserComparator,
 };
+use crate::value::Value;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize};
+use serde::Deserialize;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
+use thiserror::Error;
+
+const INVALID_VALUE_TXT: &str = "<invalid value>";
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("JSON parsing failed. ({0})")]
+    Parse(String),
+}
 
 #[derive(Debug, Clone)]
 pub struct ConfigEntry {
@@ -61,7 +70,7 @@ pub fn entry_from_json(
     json: &str,
     etag: &str,
     fetch_time: DateTime<Utc>,
-) -> Result<ConfigEntry, InternalError> {
+) -> Result<ConfigEntry, Error> {
     match serde_json::from_str::<Config>(json) {
         Ok(config) => {
             let mut entry = ConfigEntry {
@@ -74,15 +83,15 @@ pub fn entry_from_json(
             post_process(conf_mut);
             Ok(entry)
         }
-        Err(err) => Err(InternalError::Parse(err.to_string())),
+        Err(err) => Err(Error::Parse(err.to_string())),
     }
 }
 
-pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, InternalError> {
+pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
     let time_index = if let Some(time_index) = cached_json.find('\n') {
         time_index
     } else {
-        return Err(InternalError::Parse(
+        return Err(Error::Parse(
             "Number of values is fewer than expected".to_owned(),
         ));
     };
@@ -90,7 +99,7 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Internal
     let etag_index = if let Some(etag_index) = without_time.find('\n') {
         etag_index
     } else {
-        return Err(InternalError::Parse(
+        return Err(Error::Parse(
             "Number of values is fewer than expected".to_owned(),
         ));
     };
@@ -98,14 +107,12 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Internal
     let time = if let Ok(time) = time_string.parse::<i64>() {
         time
     } else {
-        return Err(InternalError::Parse(format!(
-            "Invalid fetch time: '{time_string}'"
-        )));
+        return Err(Error::Parse(format!("Invalid fetch time: '{time_string}'")));
     };
     let fetch_time = if let Some(fetch_time) = DateTime::from_timestamp_millis(time) {
         fetch_time
     } else {
-        return Err(InternalError::Parse(format!(
+        return Err(Error::Parse(format!(
             "Invalid unix seconds value: '{time}'"
         )));
     };
@@ -216,7 +223,7 @@ pub struct TargetingRule {
     pub conditions: Option<Vec<Condition>>,
     /// The list of percentage options associated with the targeting rule or empty if the targeting rule has a served value THEN part.
     #[serde(rename = "p")]
-    pub percentage_options: Option<Vec<PercentageOption>>,
+    pub percentage_options: Option<Vec<Arc<PercentageOption>>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -241,7 +248,7 @@ pub struct UserCondition {
     pub string_val: Option<String>,
     /// The value that the User Object attribute is compared to, when the comparator works with a numeric comparison value.
     #[serde(rename = "d")]
-    pub double_val: Option<f64>,
+    pub float_val: Option<f64>,
     /// The value that the User Object attribute is compared to, when the comparator works with an array of text comparison value.
     #[serde(rename = "l")]
     pub string_vec_val: Option<Vec<String>>,
@@ -258,10 +265,10 @@ const STRING_LIST_MAX_LENGTH: usize = 10;
 impl Display for UserCondition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let res = write!(f, "User.{} {}", self.comp_attr, self.comparator);
-        if self.double_val.is_none() && self.string_val.is_none() && self.string_vec_val.is_none() {
-            return f.write_str("<invalid value>");
+        if self.float_val.is_none() && self.string_val.is_none() && self.string_vec_val.is_none() {
+            return f.write_str(INVALID_VALUE_TXT);
         }
-        if let Some(num) = self.double_val {
+        if let Some(num) = self.float_val {
             return if self.comparator.is_date() {
                 let date = DateTime::from_timestamp_millis(num as i64).unwrap();
                 write!(f, "{num} ({date})")
@@ -399,48 +406,31 @@ pub struct SettingValue {
 }
 
 impl SettingValue {
-    pub(crate) fn is_valid(&self, setting_type: &SettingType) -> bool {
-        match setting_type {
-            SettingType::Bool => self.bool_val.is_some(),
-            SettingType::String => self.string_val.is_some(),
-            SettingType::Int => self.int_val.is_some(),
-            SettingType::Double => self.float_val.is_some(),
-        }
-    }
-
-    pub(crate) fn eq_by_type(&self, other: &SettingValue, setting_type: &SettingType) -> bool {
+    pub(crate) fn as_val(&self, setting_type: &SettingType) -> Option<Value> {
         match setting_type {
             SettingType::Bool => {
                 if let Some(bool_val) = self.bool_val {
-                    if let Some(other_bool_val) = other.bool_val {
-                        return bool_val == other_bool_val;
-                    }
+                    return Some(Value::Bool(bool_val));
                 }
-                false
+                None
             }
             SettingType::String => {
                 if let Some(string_val) = self.string_val.as_ref() {
-                    if let Some(other_string_val) = other.string_val.as_ref() {
-                        return string_val == other_string_val;
-                    }
+                    return Some(Value::String(string_val.clone()));
                 }
-                false
+                None
             }
             SettingType::Int => {
                 if let Some(int_val) = self.int_val {
-                    if let Some(other_int_val) = other.int_val {
-                        return int_val == other_int_val;
-                    }
+                    return Some(Value::Int(int_val));
                 }
-                false
+                None
             }
-            SettingType::Double => {
+            SettingType::Float => {
                 if let Some(float_val) = self.float_val {
-                    if let Some(other_float_val) = other.float_val {
-                        return float_val == other_float_val;
-                    }
+                    return Some(Value::Float(float_val));
                 }
-                false
+                None
             }
         }
     }
@@ -457,7 +447,7 @@ impl Display for SettingValue {
         } else if let Some(i) = self.int_val.as_ref() {
             write!(f, "{i}")
         } else {
-            f.write_str("<invalid value>")
+            f.write_str(INVALID_VALUE_TXT)
         }
     }
 }
