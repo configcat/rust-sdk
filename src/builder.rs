@@ -3,7 +3,7 @@ use crate::constants::SDK_KEY_PROXY_PREFIX;
 use crate::errors::{ClientError, ErrorKind};
 use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
-use crate::r#override::FlagOverrides;
+use crate::r#override::{FlagOverrides, OptionalOverrides};
 use crate::{Client, ConfigCache, OverrideBehavior, OverrideDataSource};
 use std::borrow::Borrow;
 use std::time::Duration;
@@ -255,7 +255,9 @@ impl ClientBuilder {
                 "SDK Key cannot be empty".to_owned(),
             ));
         }
-        if !self.is_sdk_key_valid(self.sdk_key.as_str(), self.base_url.is_some()) {
+        if !self.overrides.is_local()
+            && !self.is_sdk_key_valid(self.sdk_key.as_str(), self.base_url.is_some())
+        {
             return Err(ClientError::new(
                 ErrorKind::InvalidSdkKey,
                 format!("SDK Key '{}' is invalid.", self.sdk_key),

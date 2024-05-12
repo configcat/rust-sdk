@@ -491,7 +491,7 @@ fn eval_prerequisite_cond(
             .iter()
             .map(|k| format!("'{k}'"))
             .collect::<Vec<String>>()
-            .join(" => ");
+            .join(" -> ");
         return Fatal(output);
     }
 

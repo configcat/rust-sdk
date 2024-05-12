@@ -1,4 +1,4 @@
-use crate::utils::{construct_bool_json_payload, produce_mock_path, rand_sdk_key};
+use crate::utils::{construct_bool_json_payload, produce_mock_path};
 use configcat::OverrideBehavior::{LocalOnly, LocalOverRemote, RemoteOverLocal};
 use configcat::Value::{Bool, Float, Int};
 use configcat::{Client, FileDataSource, MapDataSource, Value};
@@ -8,7 +8,7 @@ mod utils;
 
 #[tokio::test]
 async fn file_simple() {
-    let client = Client::builder(rand_sdk_key().as_str())
+    let client = Client::builder("local")
         .overrides(
             Box::new(FileDataSource::new("tests/data/test_json_simple.json").unwrap()),
             LocalOnly,
@@ -33,7 +33,7 @@ async fn file_simple() {
 
 #[tokio::test]
 async fn file_complex() {
-    let client = Client::builder(rand_sdk_key().as_str())
+    let client = Client::builder("local")
         .overrides(
             Box::new(FileDataSource::new("tests/data/test_json_complex.json").unwrap()),
             LocalOnly,
@@ -58,7 +58,7 @@ async fn file_complex() {
 
 #[tokio::test]
 async fn map() {
-    let client = Client::builder(rand_sdk_key().as_str())
+    let client = Client::builder("local")
         .overrides(
             Box::new(MapDataSource::new(HashMap::from([
                 ("enabledFeature".to_owned(), Bool(true)),
