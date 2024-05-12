@@ -30,3 +30,4 @@ semver = "1.0"
 [dev-dependencies]
 mockito = "1.2.0"
 tokio = { version = "1.17.0", features = ["rt-multi-thread"] }
+rand = "0.8.5"

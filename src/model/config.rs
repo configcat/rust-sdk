@@ -1,7 +1,9 @@
 use crate::model::enums::{
     PrerequisiteFlagComparator, RedirectMode, SegmentComparator, SettingType, UserComparator,
 };
+use crate::r#override::FlagOverrides;
 use crate::value::Value;
+use crate::OverrideBehavior;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::cmp::min;
@@ -56,12 +58,11 @@ impl ConfigEntry {
         self.etag.is_empty() && self.config_json.is_empty()
     }
 
-    pub fn with_time(&self, time: DateTime<Utc>) -> Self {
+    pub fn local() -> Self {
         Self {
-            fetch_time: time,
-            etag: self.etag.clone(),
-            config_json: self.config_json.clone(),
-            config: self.config.clone(),
+            etag: "local".to_owned(),
+            config_json: "local".to_owned(),
+            ..ConfigEntry::default()
         }
     }
 }
@@ -79,8 +80,9 @@ pub fn entry_from_json(
                 fetch_time,
                 config_json: json.to_owned(),
             };
-            let conf_mut = Arc::get_mut(&mut entry.config).unwrap();
-            post_process(conf_mut);
+            if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
+                post_process_config(conf_mut);
+            };
             Ok(entry)
         }
         Err(err) => Err(Error::Parse(err.to_string())),
@@ -122,7 +124,7 @@ pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
     entry_from_json(config_json, etag, fetch_time)
 }
 
-fn post_process(config: &mut Config) {
+pub fn post_process_config(config: &mut Config) {
     config.salt = match &config.preferences {
         Some(pref) => pref.salt.clone(),
         None => None,
@@ -149,6 +151,24 @@ fn post_process(config: &mut Config) {
     }
 }
 
+pub fn process_overrides(entry: &mut ConfigEntry, overrides: &Option<FlagOverrides>) {
+    if let Some(ov) = overrides {
+        if matches!(ov.behavior(), OverrideBehavior::LocalOverRemote) {
+            if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
+                conf_mut.settings.extend(ov.source().settings().clone());
+            };
+        }
+        if matches!(ov.behavior(), OverrideBehavior::RemoteOverLocal) {
+            if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
+                let mut local = ov.source().settings().clone();
+                local.extend(conf_mut.settings.clone());
+                conf_mut.settings = local;
+            };
+        }
+    }
+}
+
+/// Describes a ConfigCat config JSON.
 #[derive(Deserialize, Debug, Default)]
 pub struct Config {
     /// The dictionary of settings.
@@ -176,7 +196,7 @@ pub struct Preferences {
 }
 
 /// Describes a feature flag or setting.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Setting {
     /// The value that is returned when none of the targeting rules or percentage options yield a result.
     #[serde(rename = "v")]
@@ -199,6 +219,20 @@ pub struct Setting {
 
     #[serde(skip)]
     pub(crate) salt: Option<String>,
+}
+
+impl From<Value> for Setting {
+    fn from(value: Value) -> Self {
+        Setting {
+            setting_type: (&value).into(),
+            value: value.into(),
+            variation_id: None,
+            percentage_options: None,
+            percentage_attribute: None,
+            targeting_rules: None,
+            salt: None,
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -389,7 +423,7 @@ pub struct ServedValue {
 }
 
 /// Describes a setting's value.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct SettingValue {
     /// Holds a bool feature flag's value.
     #[serde(rename = "b")]
@@ -432,6 +466,29 @@ impl SettingValue {
                 }
                 None
             }
+        }
+    }
+}
+
+impl From<Value> for SettingValue {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Bool(val) => SettingValue {
+                bool_val: Some(val),
+                ..SettingValue::default()
+            },
+            Value::Int(val) => SettingValue {
+                int_val: Some(val),
+                ..SettingValue::default()
+            },
+            Value::Float(val) => SettingValue {
+                float_val: Some(val),
+                ..SettingValue::default()
+            },
+            Value::String(val) => SettingValue {
+                string_val: Some(val),
+                ..SettingValue::default()
+            },
         }
     }
 }

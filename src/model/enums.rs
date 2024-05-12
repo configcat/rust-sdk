@@ -1,3 +1,4 @@
+use crate::Value;
 use serde_repr::Deserialize_repr;
 use std::fmt::{Display, Formatter};
 
@@ -30,6 +31,17 @@ pub enum SettingType {
     Int = 2,
     /// The decimal number setting type.
     Float = 3,
+}
+
+impl From<&Value> for SettingType {
+    fn from(value: &Value) -> Self {
+        match value {
+            Value::Bool(_) => SettingType::Bool,
+            Value::Int(_) => SettingType::Int,
+            Value::Float(_) => SettingType::Float,
+            Value::String(_) => SettingType::String,
+        }
+    }
 }
 
 impl Display for SettingType {

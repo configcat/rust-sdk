@@ -3,24 +3,11 @@ use crate::constants::SDK_KEY_PROXY_PREFIX;
 use crate::errors::{ClientError, ErrorKind};
 use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
-use crate::{Client, ConfigCache};
+use crate::r#override::FlagOverrides;
+use crate::{Client, ConfigCache, OverrideBehavior, OverrideDataSource};
 use std::borrow::Borrow;
 use std::time::Duration;
 
-/// Configuration options for the ConfigCat [`Client`].
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::time::Duration;
-/// use configcat::{DataGovernance, Client, PollingMode};
-///
-/// let builder = Client::builder("SDK_KEY")
-///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
-///     .data_governance(DataGovernance::EU);
-///
-/// let client = builder.build().unwrap();
-/// ```
 pub struct Options {
     sdk_key: String,
     offline: bool,
@@ -28,47 +15,45 @@ pub struct Options {
     data_governance: DataGovernance,
     http_timeout: Duration,
     cache: Box<dyn ConfigCache>,
+    overrides: Option<FlagOverrides>,
     polling_mode: PollingMode,
 }
 
 impl Options {
-    /// Gets the SDK key.
-    pub fn sdk_key(&self) -> &str {
+    pub(crate) fn sdk_key(&self) -> &str {
         &self.sdk_key
     }
 
-    /// True when the SDK is in offline mode, otherwise false.
-    pub fn offline(&self) -> bool {
+    pub(crate) fn offline(&self) -> bool {
         self.offline
     }
 
-    /// Gets the configured base URL.
-    pub fn base_url(&self) -> &Option<String> {
+    pub(crate) fn base_url(&self) -> &Option<String> {
         &self.base_url
     }
 
-    /// Gets the configured [`DataGovernance`] option.
-    pub fn data_governance(&self) -> &DataGovernance {
+    pub(crate) fn data_governance(&self) -> &DataGovernance {
         &self.data_governance
     }
 
-    /// Gets the configured HTTP request timeout.
-    pub fn http_timeout(&self) -> &Duration {
+    pub(crate) fn http_timeout(&self) -> &Duration {
         &self.http_timeout
     }
 
-    /// Gets the configured [`ConfigCache`] implementation.
-    pub fn cache(&self) -> &dyn ConfigCache {
+    pub(crate) fn cache(&self) -> &dyn ConfigCache {
         self.cache.borrow()
     }
 
-    /// Gets the configured [`PollingMode`].
-    pub fn polling_mode(&self) -> &PollingMode {
+    pub(crate) fn polling_mode(&self) -> &PollingMode {
         &self.polling_mode
+    }
+
+    pub(crate) fn overrides(&self) -> &Option<FlagOverrides> {
+        &self.overrides
     }
 }
 
-/// Builder to create [`Options`] used by the ConfigCat [`Client`].
+/// Builder to create ConfigCat [`Client`].
 ///
 /// # Examples
 ///
@@ -82,17 +67,18 @@ impl Options {
 ///
 /// let client = builder.build().unwrap();
 /// ```
-pub struct OptionsBuilder {
+pub struct ClientBuilder {
     sdk_key: String,
     base_url: Option<String>,
     data_governance: Option<DataGovernance>,
     http_timeout: Option<Duration>,
     cache: Option<Box<dyn ConfigCache>>,
+    overrides: Option<FlagOverrides>,
     offline: bool,
     polling_mode: Option<PollingMode>,
 }
 
-impl OptionsBuilder {
+impl ClientBuilder {
     const SDK_KEY_PREFIX: &'static str = "configcat-sdk-1";
     const SDK_KEY_SECTION_LENGTH: usize = 22;
 
@@ -105,6 +91,7 @@ impl OptionsBuilder {
             cache: None,
             polling_mode: None,
             data_governance: None,
+            overrides: None,
         }
     }
 
@@ -217,6 +204,32 @@ impl OptionsBuilder {
         self
     }
 
+    /// Sets feature flag and setting overrides for the SDK.
+    ///
+    /// With overrides, you can overwrite feature flag and setting values
+    /// downloaded from the ConfigCat CDN with local values.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::collections::HashMap;
+    /// use std::time::Duration;
+    /// use configcat::{Client, MapDataSource, OverrideBehavior, PollingMode, Value};
+    ///
+    /// let builder = Client::builder("SDK_KEY")
+    ///     .overrides(Box::new(MapDataSource::new(HashMap::from([
+    ///         ("flag".to_owned(), Value::Bool(true))
+    ///     ]))), OverrideBehavior::LocalOnly);
+    /// ```
+    pub fn overrides(
+        mut self,
+        source: Box<dyn OverrideDataSource>,
+        behavior: OverrideBehavior,
+    ) -> Self {
+        self.overrides = Some(FlagOverrides::new(source, behavior));
+        self
+    }
+
     /// Creates a [`Client`] from the configuration made on the builder.
     ///
     /// # Errors
@@ -262,6 +275,7 @@ impl OptionsBuilder {
             base_url: self.base_url,
             data_governance: self.data_governance.unwrap_or(DataGovernance::Global),
             http_timeout: self.http_timeout.unwrap_or(Duration::from_secs(30)),
+            overrides: self.overrides,
         }
     }
 

@@ -43,12 +43,14 @@ impl ErrorKind {
 /// Error struct that holds the [ErrorKind] and message of the reported failure.
 #[derive(Debug, PartialEq)]
 pub struct ClientError {
+    /// Error kind that represents failures reported by the [`crate::Client`].
     pub kind: ErrorKind,
+    /// The text representation of the failure.
     pub message: String,
 }
 
 impl ClientError {
-    pub fn new(kind: ErrorKind, message: String) -> Self {
+    pub(crate) fn new(kind: ErrorKind, message: String) -> Self {
         Self { message, kind }
     }
 }

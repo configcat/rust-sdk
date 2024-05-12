@@ -22,6 +22,9 @@ impl EvalLogBuilder {
     }
 
     pub fn dec_indent(&mut self) -> &mut Self {
+        if self.indent == 0 {
+            return self;
+        }
         self.indent -= 1;
         self
     }

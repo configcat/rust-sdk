@@ -25,30 +25,27 @@ pub fn parse_semver(input: &str) -> Result<Version, Error> {
 }
 
 #[cfg(test)]
-pub mod test_utils {
-    use log::{Level, Log, Metadata, Record};
+mod utils_test {
+    use crate::utils::parse_semver;
+    use crate::utils::sha1;
+    use crate::utils::sha256;
 
-    pub struct PrintLog {}
+    #[test]
+    fn hash() {
+        assert_eq!(
+            sha1("test_payload"),
+            "683231cec21572ae3afd898a1b1487f6b9193ebb"
+        );
+        assert_eq!(
+            sha256("test_payload", "salt", "ctx_salt"),
+            "5ee9b44b3b90bedd9441b256c429f862ceb2ea847a58a8e33d8052da141e47aa"
+        );
+    }
 
-    impl Log for PrintLog {
-        fn enabled(&self, metadata: &Metadata) -> bool {
-            metadata.level() <= log::max_level() && metadata.target().contains("configcat")
-        }
-
-        fn log(&self, record: &Record) {
-            if !self.enabled(record.metadata()) {
-                return;
-            }
-            let level = match record.level() {
-                Level::Error => "[ERROR]",
-                Level::Warn => "[WARN]",
-                Level::Info => "[INFO]",
-                Level::Debug => "[DEBUG]",
-                Level::Trace => "[TRACE]",
-            };
-            println!("{level} {}", record.args());
-        }
-
-        fn flush(&self) {}
+    #[test]
+    fn semver_ignore_build_meta() {
+        assert!(parse_semver("1.0.0-alpha+build.1")
+            .unwrap()
+            .eq(&parse_semver("1.0.0-alpha").unwrap()));
     }
 }

@@ -825,7 +825,7 @@ fn eval_starts_ends_with(
     salt: &Option<String>,
     ctx_salt: &str,
 ) -> ConditionResult {
-    let needs_true = if comp.is_sensitive() {
+    let needs_true = if comp.is_starts_with() {
         if comp.is_sensitive() {
             *comp == StartsWithAnyOfHashed
         } else {
@@ -836,10 +836,9 @@ fn eval_starts_ends_with(
     } else {
         *comp == EndsWithAnyOf
     };
-    let user_val_len = user_val.len();
-    let user_val_ref = user_val.as_str();
-    for item in comp_val.iter() {
-        if comp.is_sensitive() {
+    if comp.is_sensitive() {
+        let user_val_len = user_val.len();
+        for item in comp_val.iter() {
             let st = if let Some(st) = salt {
                 st
             } else {
@@ -858,17 +857,24 @@ fn eval_starts_ends_with(
                 continue;
             }
             if comp.is_starts_with() {
-                let chunk = &user_val_ref[..length];
-                if utils::sha256(chunk, st, ctx_salt) == parts[1] {
-                    return Success(needs_true);
+                if user_val.is_char_boundary(length) {
+                    let chunk = &user_val[..length];
+                    if utils::sha256(chunk, st, ctx_salt) == parts[1] {
+                        return Success(needs_true);
+                    }
                 }
             } else {
-                let chunk = &user_val_ref[(user_val_len - length)..];
-                if utils::sha256(chunk, st, ctx_salt) == parts[1] {
-                    return Success(needs_true);
+                let index = user_val_len - length;
+                if user_val.is_char_boundary(index) {
+                    let chunk = &user_val[index..];
+                    if utils::sha256(chunk, st, ctx_salt) == parts[1] {
+                        return Success(needs_true);
+                    }
                 }
             }
-        } else {
+        }
+    } else {
+        for item in comp_val.iter() {
             let condition = if comp.is_starts_with() {
                 user_val.starts_with(item.as_str())
             } else {

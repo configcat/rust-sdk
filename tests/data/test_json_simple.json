@@ -3,7 +3,7 @@
     "disabledFeature": false,
     "enabledFeature": true,
     "intSetting": 5,
-    "doubleSetting": 3.14,
+    "doubleSetting": 1.2,
     "stringSetting": "test"
   }
 }

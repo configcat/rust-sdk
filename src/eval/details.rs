@@ -23,6 +23,7 @@ use std::sync::Arc;
 /// ```
 #[derive(Default)]
 pub struct EvaluationDetails<T> {
+    /// Value of the feature flag or setting.
     pub value: T,
     /// Key of the feature flag or setting.
     pub key: String,

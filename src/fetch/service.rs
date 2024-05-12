@@ -7,14 +7,16 @@ use chrono::{DateTime, Utc};
 use log::warn;
 use tokio_util::sync::CancellationToken;
 
+use crate::builder::Options;
 use crate::constants::{CONFIG_FILE_NAME, SERIALIZATION_FORMAT_VERSION};
 use crate::errors::ClientError;
 use crate::fetch::fetcher::{FetchResponse, Fetcher};
-use crate::model::config::{entry_from_cached_json, Config, ConfigEntry};
+use crate::model::config::{entry_from_cached_json, process_overrides, Config, ConfigEntry};
 use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
-use crate::options::Options;
+use crate::r#override::OptionalOverrides;
 use crate::utils::sha1;
+use crate::OverrideBehavior;
 
 pub enum ServiceResult {
     Ok(ConfigResult),
@@ -99,7 +101,9 @@ impl ConfigService {
             close: Once::new(),
         };
         match service.options.polling_mode() {
-            PollingMode::AutoPoll(interval) if !service.options.offline() => {
+            PollingMode::AutoPoll(interval)
+                if !service.options.offline() && !service.options.overrides().is_local() =>
+            {
                 service.start_poll(*interval)
             }
             _ => service.state.initialized(),
@@ -170,6 +174,22 @@ async fn fetch_if_older(
     prefer_cached: bool,
 ) -> ServiceResult {
     let mut entry = state.cached_entry.lock().await;
+    if let Some(ov) = options.overrides() {
+        if matches!(ov.behavior(), OverrideBehavior::LocalOnly) && entry.is_empty() {
+            *entry = ConfigEntry {
+                config: Arc::new(Config {
+                    settings: ov.source().settings().clone(),
+                    ..Config::default()
+                }),
+                ..ConfigEntry::local()
+            };
+            return ServiceResult::Ok(ConfigResult::new(
+                entry.config.clone(),
+                DateTime::<Utc>::MIN_UTC,
+            ));
+        }
+    }
+
     let from_cache = read_cache(state, options, &entry.config_json).unwrap_or_default();
 
     if !from_cache.is_empty() && *entry != from_cache {
@@ -184,7 +204,8 @@ async fn fetch_if_older(
     let response = state.fetcher.fetch(&entry.etag).await;
     state.initialized();
     match response {
-        FetchResponse::Fetched(new_entry) => {
+        FetchResponse::Fetched(mut new_entry) => {
+            process_overrides(&mut new_entry, options.overrides());
             *entry = new_entry;
             options
                 .cache()
@@ -192,7 +213,7 @@ async fn fetch_if_older(
             ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
         }
         FetchResponse::NotModified => {
-            *entry = entry.with_time(Utc::now());
+            entry.fetch_time = Utc::now();
             options
                 .cache()
                 .write(&state.cache_key, entry.serialize().as_str());
@@ -200,7 +221,7 @@ async fn fetch_if_older(
         }
         FetchResponse::Failed(err, transient) => {
             if !transient && !entry.is_empty() {
-                *entry = entry.with_time(Utc::now());
+                entry.fetch_time = Utc::now();
                 options
                     .cache()
                     .write(&state.cache_key, entry.serialize().as_str());
@@ -224,7 +245,10 @@ fn read_cache(
     }
     let parsed = entry_from_cached_json(from_cache_str.as_str());
     match parsed {
-        Ok(entry) => Some(entry),
+        Ok(mut entry) => {
+            process_overrides(&mut entry, options.overrides());
+            Some(entry)
+        }
         Err(err) => {
             warn!(event_id = 2201; "Error occurred while reading the cache. ({err})");
             None
@@ -242,21 +266,19 @@ mod service_tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use crate::builder::{ClientBuilder, Options};
     use crate::constants::test_constants::{MOCK_KEY, MOCK_PATH};
     use crate::fetch::service::ConfigService;
     use crate::model::config::entry_from_cached_json;
     use crate::modes::PollingMode;
-    use crate::options::{Options, OptionsBuilder};
 
     #[test]
     fn cache_key_generation() {
         {
             let opts = Arc::new(
-                OptionsBuilder::new(
-                    "configcat-sdk-1/TEST_KEY-0123456789012/1234567890123456789012",
-                )
-                .polling_mode(PollingMode::Manual)
-                .build_options(),
+                ClientBuilder::new("configcat-sdk-1/TEST_KEY-0123456789012/1234567890123456789012")
+                    .polling_mode(PollingMode::Manual)
+                    .build_options(),
             );
             let service = ConfigService::new(opts);
             assert_eq!(
@@ -266,11 +288,9 @@ mod service_tests {
         }
         {
             let opts = Arc::new(
-                OptionsBuilder::new(
-                    "configcat-sdk-1/TEST_KEY2-123456789012/1234567890123456789012",
-                )
-                .polling_mode(PollingMode::Manual)
-                .build_options(),
+                ClientBuilder::new("configcat-sdk-1/TEST_KEY2-123456789012/1234567890123456789012")
+                    .polling_mode(PollingMode::Manual)
+                    .build_options(),
             );
             let service = ConfigService::new(opts);
             assert_eq!(
@@ -538,7 +558,7 @@ mod service_tests {
         let m = create_success_mock(&mut server, 0).await;
 
         let opts = Arc::new(
-            OptionsBuilder::new(MOCK_KEY)
+            ClientBuilder::new(MOCK_KEY)
                 .base_url(server.url().as_str())
                 .polling_mode(PollingMode::AutoPoll(Duration::from_millis(100)))
                 .offline(true)
@@ -560,7 +580,7 @@ mod service_tests {
         cache: Option<Box<dyn ConfigCache>>,
     ) -> Arc<Options> {
         Arc::new(
-            OptionsBuilder::new(MOCK_KEY)
+            ClientBuilder::new(MOCK_KEY)
                 .cache(cache.unwrap_or(Box::new(EmptyConfigCache::new())))
                 .base_url(url.as_str())
                 .polling_mode(mode)
