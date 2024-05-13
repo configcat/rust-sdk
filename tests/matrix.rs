@@ -10,202 +10,103 @@ enum Kind {
 
 #[tokio::test]
 async fn rollout_v1() {
-    run(
-        "testmatrix.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", Kind::Value).await
 }
 
 #[tokio::test]
 async fn rollout_v2() {
-    run(
-        "testmatrix.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/AG6C1ngVb0CvM07un6JisQ",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/AG6C1ngVb0CvM07un6JisQ", Kind::Value).await
 }
 
 #[tokio::test]
 async fn segments_v1() {
-    run(
-        "testmatrix_segments_old.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/LcYz135LE0qbcacz2mgXnA",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_segments_old.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/LcYz135LE0qbcacz2mgXnA", Kind::Value).await
 }
 
 #[tokio::test]
 async fn segments_v2() {
-    run(
-        "testmatrix_segments_old.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/y_ZB7o-Xb0Swxth-ZlMSeA",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_segments_old.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/y_ZB7o-Xb0Swxth-ZlMSeA", Kind::Value).await
 }
 
 #[tokio::test]
 async fn semver1_v1() {
-    run(
-        "testmatrix_semantic.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_semantic.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", Kind::Value).await
 }
 
 #[tokio::test]
 async fn semver1_v2() {
-    run(
-        "testmatrix_semantic.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/iV8vH2MBakKxkFZylxHmTg",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_semantic.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/iV8vH2MBakKxkFZylxHmTg", Kind::Value).await
 }
 
 #[tokio::test]
 async fn semver2_v1() {
-    run(
-        "testmatrix_semantic_2.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_semantic_2.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", Kind::Value).await
 }
 
 #[tokio::test]
 async fn semver2_v2() {
-    run(
-        "testmatrix_semantic_2.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/U8nt3zEhDEO5S2ulubCopA",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_semantic_2.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/U8nt3zEhDEO5S2ulubCopA", Kind::Value).await
 }
 
 #[tokio::test]
 async fn number_v1() {
-    run(
-        "testmatrix_number.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_number.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", Kind::Value).await
 }
 
 #[tokio::test]
 async fn number_v2() {
-    run(
-        "testmatrix_number.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/FCWN-k1dV0iBf8QZrDgjdw",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_number.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/FCWN-k1dV0iBf8QZrDgjdw", Kind::Value).await
 }
 
 #[tokio::test]
 async fn sensitive_v1() {
-    run(
-        "testmatrix_sensitive.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_sensitive.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA", Kind::Value).await
 }
 
 #[tokio::test]
 async fn sensitive_v2() {
-    run(
-        "testmatrix_sensitive.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/-0YmVOUNgEGKkgRF-rU65g",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_sensitive.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/-0YmVOUNgEGKkgRF-rU65g", Kind::Value).await
 }
 
 #[tokio::test]
 async fn variation_v1() {
-    run(
-        "testmatrix_variationid.csv",
-        "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA",
-        Kind::Variation,
-    )
-    .await
+    run("testmatrix_variationid.csv", "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA", Kind::Variation).await
 }
 
 #[tokio::test]
 async fn variation_v2() {
-    run(
-        "testmatrix_variationid.csv",
-        "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/spQnkRTIPEWVivZkWM84lQ",
-        Kind::Variation,
-    )
-    .await
+    run("testmatrix_variationid.csv", "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/spQnkRTIPEWVivZkWM84lQ", Kind::Variation).await
 }
 
 #[tokio::test]
 async fn and_or() {
-    run(
-        "testmatrix_and_or.csv",
-        "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/ByMO9yZNn02kXcm72lnY1A",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_and_or.csv", "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/ByMO9yZNn02kXcm72lnY1A", Kind::Value).await
 }
 
 #[tokio::test]
 async fn comp_v6() {
-    run(
-        "testmatrix_comparators_v6.csv",
-        "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/OfQqcTjfFUGBwMKqtyEOrQ",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_comparators_v6.csv", "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/OfQqcTjfFUGBwMKqtyEOrQ", Kind::Value).await
 }
 
 #[tokio::test]
 async fn prerequisite() {
-    run(
-        "testmatrix_prerequisite_flag.csv",
-        "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/JoGwdqJZQ0K2xDy7LnbyOg",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_prerequisite_flag.csv", "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/JoGwdqJZQ0K2xDy7LnbyOg", Kind::Value).await
 }
 
 #[tokio::test]
 async fn segments() {
-    run(
-        "testmatrix_segments.csv",
-        "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/h99HYXWWNE2bH8eWyLAVMA",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_segments.csv", "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/h99HYXWWNE2bH8eWyLAVMA", Kind::Value).await
 }
 
 #[tokio::test]
 async fn unicode() {
-    run(
-        "testmatrix_unicode.csv",
-        "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/Da6w8dBbmUeMUBhh0iEeQQ",
-        Kind::Value,
-    )
-    .await
+    run("testmatrix_unicode.csv", "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/Da6w8dBbmUeMUBhh0iEeQQ", Kind::Value).await
 }
 
 async fn run(file_name: &str, sdk_key: &str, kind: Kind) {
     let client = Client::new(sdk_key).unwrap();
 
-    let lines: Vec<String> = fs::read_to_string(format!("tests/data/{file_name}"))
-        .unwrap()
-        .lines()
-        .map(String::from)
-        .collect();
+    let lines: Vec<String> = fs::read_to_string(format!("tests/data/{file_name}")).unwrap().lines().map(String::from).collect();
 
     let header: Vec<&str> = lines[0].split(';').collect();
     let custom_key = header[3];

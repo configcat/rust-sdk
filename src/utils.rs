@@ -17,7 +17,7 @@ pub fn sha256(payload: &str, salt: &str, ctx_salt: &str) -> String {
 }
 
 pub fn parse_semver(input: &str) -> Result<Version, Error> {
-    let mut input_mut = input;
+    let mut input_mut = input.trim();
     if let Some((first, _)) = input.split_once('+') {
         input_mut = first;
     }

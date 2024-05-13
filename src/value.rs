@@ -134,6 +134,7 @@ impl OptionalValueDisplay for Option<Value> {
 }
 
 from_val_to_enum!(Value String String);
+from_val_to_enum_into!(Value String &str);
 from_val_to_enum!(Value Bool bool);
 from_val_to_enum!(Value Float f64);
 from_val_to_enum!(Value Int i64);

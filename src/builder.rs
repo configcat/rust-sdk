@@ -217,9 +217,9 @@ impl ClientBuilder {
     /// use configcat::{Client, MapDataSource, OverrideBehavior, PollingMode, Value};
     ///
     /// let builder = Client::builder("SDK_KEY")
-    ///     .overrides(Box::new(MapDataSource::new(HashMap::from([
-    ///         ("flag".to_owned(), Value::Bool(true))
-    ///     ]))), OverrideBehavior::LocalOnly);
+    ///     .overrides(Box::new(MapDataSource::from([
+    ///         ("flag", Value::Bool(true))
+    ///     ])), OverrideBehavior::LocalOnly);
     /// ```
     pub fn overrides(
         mut self,

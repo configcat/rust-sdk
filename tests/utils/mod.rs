@@ -4,10 +4,7 @@ use std::cell::RefCell;
 
 pub fn produce_mock_path() -> (String, String) {
     let sdk_key = rand_sdk_key();
-    (
-        sdk_key.clone(),
-        format!("/configuration-files/{sdk_key}/config_v6.json"),
-    )
+    (sdk_key.clone(), format!("/configuration-files/{sdk_key}/config_v6.json"))
 }
 
 pub fn rand_sdk_key() -> String {

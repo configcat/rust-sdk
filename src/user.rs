@@ -10,7 +10,7 @@ pub const IDENTIFIER: &str = "Identifier";
 pub const EMAIL: &str = "Email";
 pub const COUNTRY: &str = "Country";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 /// Supported user attribute value types.
 pub enum UserValue {
     /// String user attribute value.
@@ -106,7 +106,7 @@ impl Serialize for UserValue {
 ///     .email("john@example.com")
 ///     .custom("Rating", 4.5)
 ///     .custom("RegisteredAt", DateTime::from_str("2023-06-14T15:27:15.8440000Z").unwrap())
-///     .custom("Roles", vec!["Role1".to_owned(), "Role2".to_owned()]);
+///     .custom("Roles", ["Role1", "Role2"]);
 /// ```
 #[derive(Serialize, Clone)]
 pub struct User {
@@ -172,7 +172,7 @@ impl User {
     /// let user = User::new("user-id")
     ///     .custom("Rating", 4.5)
     ///     .custom("RegisteredAt", DateTime::from_str("2023-06-14T15:27:15.8440000Z").unwrap())
-    ///     .custom("Roles", vec!["Role1", "Role2"]);
+    ///     .custom("Roles", ["Role1", "Role2"]);
     /// ```
     pub fn custom<T: Into<UserValue>>(mut self, key: &str, value: T) -> Self {
         if key == IDENTIFIER || key == EMAIL || key == COUNTRY {
@@ -198,14 +198,23 @@ impl UserValue {
                     ("Infinity".to_owned(), true)
                 } else if val.is_infinite() && val.is_sign_negative() {
                     ("-Infinity".to_owned(), true)
-                } else {
+                } else if (1e-6..1e21).contains(&val.abs()) {
                     (val.to_string(), true)
+                } else {
+                    let sc = format!("{:+e}", val);
+                    if val.abs() > 1.0 {
+                        (sc.replace('e', "e+"), true)
+                    } else {
+                        (sc, true)
+                    }
                 }
             }
             UserValue::SemVer(val) => (val.to_string(), true),
             UserValue::Int(val) => (val.to_string(), true),
             UserValue::UInt(val) => (val.to_string(), true),
-            UserValue::DateTime(val) => (val.timestamp_millis().to_string(), true),
+            UserValue::DateTime(val) => {
+                (((val.timestamp_millis() as f64) / 1000.0).to_string(), true)
+            }
             UserValue::StringVec(val) => {
                 let ser = serde_json::to_string(val);
                 match ser {
@@ -239,7 +248,7 @@ impl UserValue {
 
     pub(crate) fn as_timestamp(&self) -> Option<f64> {
         match self {
-            UserValue::DateTime(val) => Some(val.timestamp_millis() as f64),
+            UserValue::DateTime(val) => Some((val.timestamp_millis() as f64) / 1000.0),
             _ => self.as_float(),
         }
     }
@@ -283,6 +292,12 @@ impl From<Vec<&str>> for UserValue {
     fn from(value: Vec<&str>) -> Self {
         let str_vec = value.iter().map(|v| v.to_string()).collect();
         Self::StringVec(str_vec)
+    }
+}
+
+impl<const N: usize> From<[&str; N]> for UserValue {
+    fn from(arr: [&str; N]) -> Self {
+        arr.to_vec().into()
     }
 }
 
