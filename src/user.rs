@@ -129,6 +129,10 @@ impl User {
         }
     }
 
+    pub(crate) fn from_map(map: HashMap<String, UserValue>) -> Self {
+        Self { attributes: map }
+    }
+
     /// Sets the email address of the user.
     ///
     /// # Examples:
@@ -282,7 +286,7 @@ impl UserValue {
 impl Display for User {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match serde_json::to_string(&self.attributes) {
-            Ok(str) => write!(f, "{str}"),
+            Ok(str) => f.write_str(str.as_str()),
             Err(_) => f.write_str("<invalid user>"),
         }
     }
@@ -292,6 +296,12 @@ impl From<Vec<&str>> for UserValue {
     fn from(value: Vec<&str>) -> Self {
         let str_vec = value.iter().map(|v| v.to_string()).collect();
         Self::StringVec(str_vec)
+    }
+}
+
+impl From<HashMap<String, UserValue>> for User {
+    fn from(value: HashMap<String, UserValue>) -> Self {
+        Self::from_map(value)
     }
 }
 

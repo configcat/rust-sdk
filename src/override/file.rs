@@ -59,7 +59,7 @@ impl FileDataSource {
                     Ok(simple_config) => {
                         let mut map: HashMap<String, Setting> = HashMap::new();
                         for (k, v) in simple_config.flags.iter() {
-                            let val_result = Value::from_json(v);
+                            let val_result = Value::from_json_val(v);
                             if let Some(val) = val_result {
                                 map.insert(k.clone(), val.into());
                             } else {

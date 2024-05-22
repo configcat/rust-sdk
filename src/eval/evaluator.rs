@@ -170,7 +170,7 @@ fn eval_setting(
                                 None,
                             );
                         }
-                        if eval_log_enabled!() && !result.is_success() {
+                        if eval_log_enabled!() {
                             log.inc_indent();
                         }
                         match rule.percentage_options.as_ref() {
@@ -185,7 +185,7 @@ fn eval_setting(
                                     );
                                     match percentage_result {
                                         PercentageResult::Success(opt) => {
-                                            if eval_log_enabled!() && !result.is_success() {
+                                            if eval_log_enabled!() {
                                                 log.dec_indent();
                                             }
                                             return produce_result(
@@ -207,7 +207,7 @@ fn eval_setting(
                                         user_missing_logged = true;
                                         log_user_missing(key);
                                     }
-                                    if eval_log_enabled!() && !result.is_success() {
+                                    if eval_log_enabled!() {
                                         log.new_ln(Some("Skipping % options because the User Object is missing."));
                                     }
                                 }
@@ -218,7 +218,7 @@ fn eval_setting(
                                 )
                             }
                         }
-                        if eval_log_enabled!() && !result.is_success() {
+                        if eval_log_enabled!() {
                             log.new_ln(Some(RULE_IGNORED_MSG)).dec_indent();
                         }
                     }
@@ -518,6 +518,9 @@ fn eval_prerequisite_cond(
             if eval_log_enabled!() {
                 let msg = format!("{matched}");
                 log.new_ln(Some(
+                    format!("Prerequisite flag evaluation result: '{}'.", result.value).as_str(),
+                ))
+                .new_ln(Some(
                     format!("Condition ({cond}) evaluates to {msg}.").as_str(),
                 ))
                 .dec_indent()
@@ -685,7 +688,7 @@ fn eval_user_cond(
                 user_val
             } else {
                 return AttrInvalid(
-                    format!("{user_attr} is not a valid semantic version"),
+                    format!("'{user_attr}' is not a valid semantic version"),
                     cond.comp_attr.clone(),
                     format!("{cond}"),
                 );
@@ -702,7 +705,7 @@ fn eval_user_cond(
                 user_val
             } else {
                 return AttrInvalid(
-                    format!("{user_attr} is not a valid semantic version"),
+                    format!("'{user_attr}' is not a valid semantic version"),
                     cond.comp_attr.clone(),
                     format!("{cond}"),
                 );
@@ -719,7 +722,7 @@ fn eval_user_cond(
                 user_val
             } else {
                 return AttrInvalid(
-                    format!("{user_attr} is not a valid decimal number"),
+                    format!("'{user_attr}' is not a valid decimal number"),
                     cond.comp_attr.clone(),
                     format!("{cond}"),
                 );
@@ -735,7 +738,7 @@ fn eval_user_cond(
             let user_val = if let Some(user_val) = user_attr.as_timestamp() {
                 user_val
             } else {
-                return AttrInvalid(format!("{user_attr} is not a valid Unix timestamp (number of seconds elapsed since Unix epoch)"),
+                return AttrInvalid(format!("'{user_attr}' is not a valid Unix timestamp (number of seconds elapsed since Unix epoch)"),
                                    cond.comp_attr.clone(),
                                    format!("{cond}")
                 );
@@ -1000,7 +1003,7 @@ fn eval_array_contains(
 }
 
 fn log_user_missing(key: &str) {
-    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_value()`/`get_value_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_[type]_value()`/`get_[type]_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
 }
 
 fn log_attr_missing(key: &str, attr: &str, cond_str: &str) {

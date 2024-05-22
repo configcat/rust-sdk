@@ -190,7 +190,7 @@ async fn fetch_if_older(
         }
     }
 
-    let from_cache = read_cache(state, options, &entry.config_json).unwrap_or_default();
+    let from_cache = read_cache(state, options, &entry.cache_str).unwrap_or_default();
 
     if !from_cache.is_empty() && *entry != from_cache {
         *entry = from_cache;
@@ -209,14 +209,14 @@ async fn fetch_if_older(
             *entry = new_entry;
             options
                 .cache()
-                .write(&state.cache_key, entry.serialize().as_str());
+                .write(&state.cache_key, entry.cache_str.as_str());
             ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
         }
         FetchResponse::NotModified => {
             entry.fetch_time = Utc::now();
             options
                 .cache()
-                .write(&state.cache_key, entry.serialize().as_str());
+                .write(&state.cache_key, entry.cache_str.as_str());
             ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
         }
         FetchResponse::Failed(err, transient) => {
@@ -224,7 +224,7 @@ async fn fetch_if_older(
                 entry.fetch_time = Utc::now();
                 options
                     .cache()
-                    .write(&state.cache_key, entry.serialize().as_str());
+                    .write(&state.cache_key, entry.cache_str.as_str());
             }
             ServiceResult::Err(
                 err,
@@ -240,7 +240,7 @@ fn read_cache(
     from_memory_str: &String,
 ) -> Option<ConfigEntry> {
     let from_cache_str = options.cache().read(&state.cache_key).unwrap_or_default();
-    if from_cache_str.is_empty() || from_cache_str == *from_memory_str {
+    if from_cache_str.is_empty() || from_cache_str.as_str() == from_memory_str {
         return None;
     }
     let parsed = entry_from_cached_json(from_cache_str.as_str());
@@ -544,10 +544,6 @@ mod service_tests {
         let entry = entry_from_cached_json(cached.as_str()).unwrap();
 
         assert_eq!(entry.etag, "etag1");
-        assert_eq!(
-            entry.config_json,
-            r#"{"f": {"testKey":{"t":1,"v":{"s": "test1"}}}, "s": []}"#
-        );
 
         m.assert_async().await;
     }

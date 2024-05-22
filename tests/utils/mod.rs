@@ -1,3 +1,4 @@
+use log::kv::Key;
 use log::{Level, Log, Metadata, Record};
 use rand::distributions::{Alphanumeric, DistString};
 use std::cell::RefCell;
@@ -59,13 +60,14 @@ impl Log for RecordingLogger {
             return;
         }
         let level = match record.level() {
-            Level::Error => "[ERROR]",
-            Level::Warn => "[WARN]",
-            Level::Info => "[INFO]",
-            Level::Debug => "[DEBUG]",
-            Level::Trace => "[TRACE]",
+            Level::Error => "ERROR",
+            Level::Warn => "WARNING",
+            Level::Info => "INFO",
+            Level::Debug => "DEBUG",
+            Level::Trace => "TRACE",
         };
-        Self::LOGS.with_borrow_mut(|l| l.push_str(format!("{level} {}", record.args()).as_str()));
+        let event_id = record.key_values().get(Key::from("event_id")).unwrap();
+        Self::LOGS.with_borrow_mut(|l| l.push_str(format!("{level} [{}] {}\n", event_id.to_i64().unwrap(), record.args()).as_str()));
     }
 
     fn flush(&self) {}

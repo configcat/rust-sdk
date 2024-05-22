@@ -91,7 +91,17 @@ impl Value {
         None
     }
 
-    pub(crate) fn from_json(json_val: &serde_json::Value) -> Option<Value> {
+    /// Creates a [`Value`] from a [`serde_json::Value`]. Returns [`None`] if the conversion is not possible.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use configcat::Value;
+    ///
+    /// let json_str = serde_json::Value::String("foo".to_owned());
+    /// assert_eq!(Value::String("foo".to_owned()), Value::from_json_val(&json_str).unwrap())
+    /// ```
+    pub fn from_json_val(json_val: &serde_json::Value) -> Option<Value> {
         match json_val {
             serde_json::Value::Bool(val) => Some(Value::Bool(*val)),
             serde_json::Value::String(val) => Some(Value::String(val.clone())),

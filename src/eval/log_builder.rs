@@ -58,7 +58,7 @@ impl EvalLogBuilder {
         }
         builder.append("THEN");
         if let Some(sv) = rule_srv_value.as_ref() {
-            builder.append(format!(" {}", sv.value).as_str());
+            builder.append(format!(" '{}'", sv.value).as_str());
         } else {
             builder.append(" % options");
         }

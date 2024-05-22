@@ -23,7 +23,7 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub struct ConfigEntry {
     pub config: Arc<Config>,
-    pub config_json: String,
+    pub cache_str: String,
     pub etag: String,
     pub fetch_time: DateTime<Utc>,
 }
@@ -32,7 +32,7 @@ impl Default for ConfigEntry {
     fn default() -> Self {
         Self {
             config: Arc::new(Default::default()),
-            config_json: String::default(),
+            cache_str: String::default(),
             etag: String::default(),
             fetch_time: DateTime::<Utc>::MIN_UTC,
         }
@@ -46,25 +46,21 @@ impl PartialEq for ConfigEntry {
 }
 
 impl ConfigEntry {
-    pub fn serialize(&self) -> String {
-        self.fetch_time.timestamp_millis().to_string()
-            + "\n"
-            + &self.etag
-            + "\n"
-            + &self.config_json
-    }
-
     pub fn is_empty(&self) -> bool {
-        self.etag.is_empty() && self.config_json.is_empty()
+        self.etag.is_empty() && self.cache_str.is_empty()
     }
 
     pub fn local() -> Self {
         Self {
             etag: "local".to_owned(),
-            config_json: "local".to_owned(),
+            cache_str: "local".to_owned(),
             ..ConfigEntry::default()
         }
     }
+}
+
+pub fn generate_cache_str(time: DateTime<Utc>, etag: &str, json: &str) -> String {
+    time.timestamp_millis().to_string() + "\n" + etag + "\n" + json
 }
 
 pub fn entry_from_json(
@@ -78,7 +74,7 @@ pub fn entry_from_json(
                 config: Arc::new(config),
                 etag: etag.to_owned(),
                 fetch_time,
-                config_json: json.to_owned(),
+                cache_str: generate_cache_str(fetch_time, etag, json),
             };
             if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
                 post_process_config(conf_mut);
@@ -304,17 +300,17 @@ impl Display for UserCondition {
         }
         if let Some(num) = self.float_val {
             return if self.comparator.is_date() {
-                let date = DateTime::from_timestamp_millis(num as i64).unwrap();
-                write!(f, "{num} ({date})")
+                let date = DateTime::from_timestamp_millis((num * 1000.0) as i64).unwrap();
+                write!(f, "'{num}' ({})", date.format("%Y-%m-%dT%H:%M:%S%.3f %Z"))
             } else {
-                write!(f, "{num}")
+                write!(f, "'{num}'")
             };
         }
         if let Some(text) = self.string_val.as_ref() {
             return if self.comparator.is_sensitive() {
-                f.write_str("<hashed value>")
+                f.write_str("'<hashed value>'")
             } else {
-                f.write_str(text.as_str())
+                write!(f, "'{text}'")
             };
         }
         if let Some(vec) = self.string_vec_val.as_ref() {
@@ -391,7 +387,7 @@ impl Display for PrerequisiteFlagCondition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {}",
+            "Flag '{}' {} '{}'",
             self.flag_key, self.prerequisite_comparator, self.flag_value
         )
     }
@@ -525,8 +521,7 @@ mod model_tests {
         assert_eq!(result.config.settings.len(), 1);
         assert_eq!(result.etag, "test-etag");
         assert_eq!(result.fetch_time, exp_time);
-        assert_eq!(result.config_json, CONFIG_JSON);
-        assert_eq!(payload, result.serialize());
+        assert_eq!(result.cache_str, payload);
     }
 
     #[test]
