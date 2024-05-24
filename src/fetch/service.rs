@@ -175,14 +175,16 @@ async fn fetch_if_older(
 ) -> ServiceResult {
     let mut entry = state.cached_entry.lock().await;
     if let Some(ov) = options.overrides() {
-        if matches!(ov.behavior(), OverrideBehavior::LocalOnly) && entry.is_empty() {
-            *entry = ConfigEntry {
-                config: Arc::new(Config {
-                    settings: ov.source().settings().clone(),
-                    ..Config::default()
-                }),
-                ..ConfigEntry::local()
-            };
+        if matches!(ov.behavior(), OverrideBehavior::LocalOnly) {
+            if entry.is_empty() {
+                *entry = ConfigEntry {
+                    config: Arc::new(Config {
+                        settings: ov.source().settings().clone(),
+                        ..Config::default()
+                    }),
+                    ..ConfigEntry::local()
+                };
+            }
             return ServiceResult::Ok(ConfigResult::new(
                 entry.config.clone(),
                 DateTime::<Utc>::MIN_UTC,

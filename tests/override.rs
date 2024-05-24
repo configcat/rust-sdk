@@ -29,7 +29,11 @@ async fn file_complex() {
 
 #[tokio::test]
 async fn map() {
-    let client = Client::builder("local")
+    let mut server = mockito::Server::new_async().await;
+    let (sdk_key, path) = produce_mock_path();
+    let m = server.mock("GET", path.as_str()).with_status(200).expect(0).create_async().await;
+
+    let client = Client::builder(sdk_key.as_str())
         .overrides(
             Box::new(MapDataSource::from([
                 ("enabledFeature", Bool(true)),
@@ -48,6 +52,8 @@ async fn map() {
     assert_eq!(client.get_int_value("intSetting", None, 0).await, 5);
     assert_eq!(client.get_float_value("doubleSetting", None, 0.0).await, 1.2);
     assert_eq!(client.get_str_value("stringSetting", None, String::default()).await, "test".to_owned());
+
+    m.assert_async().await;
 }
 
 #[tokio::test]
