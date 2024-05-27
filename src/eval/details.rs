@@ -12,7 +12,7 @@ use std::sync::Arc;
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let client = Client::new("SDK_KEY").unwrap();
+///     let client = Client::new("sdk-key").unwrap();
 ///
 ///     let user = User::new("user-id");
 ///     let details = client.get_bool_details("flag-key", Some(user), false).await;

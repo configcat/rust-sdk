@@ -5,10 +5,7 @@ use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-
-pub const IDENTIFIER: &str = "Identifier";
-pub const EMAIL: &str = "Email";
-pub const COUNTRY: &str = "Country";
+use std::ops::Index;
 
 #[derive(Clone, Debug)]
 /// Supported user attribute value types.
@@ -27,43 +24,6 @@ pub enum UserValue {
     StringVec(Vec<String>),
     /// Semantic version user attribute value.
     SemVer(Version),
-}
-
-impl Display for UserValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UserValue::String(val) => f.write_str(val),
-            UserValue::Int(val) => write!(f, "{val}"),
-            UserValue::UInt(val) => write!(f, "{val}"),
-            UserValue::Float(val) => write!(f, "{val}"),
-            UserValue::DateTime(val) => f.write_str(val.to_string().as_str()),
-            UserValue::StringVec(_) => f.write_str("<vec of strings>"),
-            UserValue::SemVer(val) => f.write_str(val.to_string().as_str()),
-        }
-    }
-}
-
-impl Serialize for UserValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            UserValue::String(val) => serializer.serialize_str(val),
-            UserValue::Int(val) => serializer.serialize_i64(*val),
-            UserValue::UInt(val) => serializer.serialize_u64(*val),
-            UserValue::Float(val) => serializer.serialize_f64(*val),
-            UserValue::DateTime(val) => serializer.serialize_str(val.to_string().as_str()),
-            UserValue::StringVec(val) => {
-                let mut seq = serializer.serialize_seq(Some(val.len()))?;
-                for element in val {
-                    seq.serialize_element(element)?;
-                }
-                seq.end()
-            }
-            UserValue::SemVer(val) => serializer.serialize_str(val.to_string().as_str()),
-        }
-    }
 }
 
 /// Describes a User Object. Contains user attributes which are used for evaluating targeting rules and percentage options.
@@ -107,6 +67,8 @@ impl Serialize for UserValue {
 ///     .custom("Rating", 4.5)
 ///     .custom("RegisteredAt", DateTime::from_str("2023-06-14T15:27:15.8440000Z").unwrap())
 ///     .custom("Roles", ["Role1", "Role2"]);
+///
+/// assert_eq!("user-id", user[User::IDENTIFIER].to_string().as_str());
 /// ```
 #[derive(Serialize, Clone)]
 pub struct User {
@@ -114,6 +76,13 @@ pub struct User {
 }
 
 impl User {
+    /// The predefined attribute key of the user's identifier.
+    pub const IDENTIFIER: &'static str = "Identifier";
+    /// The predefined attribute key of the user's email.
+    pub const EMAIL: &'static str = "Email";
+    /// The predefined attribute key of the user's country.
+    pub const COUNTRY: &'static str = "Country";
+
     /// Creates a new [`User`].
     ///
     /// # Examples:
@@ -125,7 +94,7 @@ impl User {
     /// ```
     pub fn new(identifier: &str) -> Self {
         Self {
-            attributes: HashMap::from([(IDENTIFIER.to_owned(), UserValue::from(identifier))]),
+            attributes: HashMap::from([(Self::IDENTIFIER.to_owned(), UserValue::from(identifier))]),
         }
     }
 
@@ -144,7 +113,7 @@ impl User {
     ///     .email("john@example.com");
     /// ```
     pub fn email(mut self, email: &str) -> Self {
-        self.attributes.insert(EMAIL.to_owned(), email.into());
+        self.attributes.insert(Self::EMAIL.to_owned(), email.into());
         self
     }
 
@@ -159,7 +128,8 @@ impl User {
     ///     .country("Hungary");
     /// ```
     pub fn country(mut self, country: &str) -> Self {
-        self.attributes.insert(COUNTRY.to_owned(), country.into());
+        self.attributes
+            .insert(Self::COUNTRY.to_owned(), country.into());
         self
     }
 
@@ -179,7 +149,7 @@ impl User {
     ///     .custom("Roles", ["Role1", "Role2"]);
     /// ```
     pub fn custom<T: Into<UserValue>>(mut self, key: &str, value: T) -> Self {
-        if key == IDENTIFIER || key == EMAIL || key == COUNTRY {
+        if key == Self::IDENTIFIER || key == Self::EMAIL || key == Self::COUNTRY {
             return self;
         }
         self.attributes.insert(key.to_owned(), value.into());
@@ -292,16 +262,61 @@ impl Display for User {
     }
 }
 
+impl From<HashMap<String, UserValue>> for User {
+    fn from(value: HashMap<String, UserValue>) -> Self {
+        Self::from_map(value)
+    }
+}
+
+impl Index<&str> for User {
+    type Output = UserValue;
+
+    fn index(&self, index: &str) -> &Self::Output {
+        &self.attributes[index]
+    }
+}
+
+impl Display for UserValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserValue::String(val) => f.write_str(val),
+            UserValue::Int(val) => write!(f, "{val}"),
+            UserValue::UInt(val) => write!(f, "{val}"),
+            UserValue::Float(val) => write!(f, "{val}"),
+            UserValue::DateTime(val) => f.write_str(val.to_string().as_str()),
+            UserValue::StringVec(_) => f.write_str("<vec of strings>"),
+            UserValue::SemVer(val) => f.write_str(val.to_string().as_str()),
+        }
+    }
+}
+
+impl Serialize for UserValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            UserValue::String(val) => serializer.serialize_str(val),
+            UserValue::Int(val) => serializer.serialize_i64(*val),
+            UserValue::UInt(val) => serializer.serialize_u64(*val),
+            UserValue::Float(val) => serializer.serialize_f64(*val),
+            UserValue::DateTime(val) => serializer.serialize_str(val.to_string().as_str()),
+            UserValue::StringVec(val) => {
+                let mut seq = serializer.serialize_seq(Some(val.len()))?;
+                for element in val {
+                    seq.serialize_element(element)?;
+                }
+                seq.end()
+            }
+            UserValue::SemVer(val) => serializer.serialize_str(val.to_string().as_str()),
+        }
+    }
+}
+
 impl From<Vec<&str>> for UserValue {
     fn from(value: Vec<&str>) -> Self {
         let str_vec = value.iter().map(|v| v.to_string()).collect();
         Self::StringVec(str_vec)
-    }
-}
-
-impl From<HashMap<String, UserValue>> for User {
-    fn from(value: HashMap<String, UserValue>) -> Self {
-        Self::from_map(value)
     }
 }
 

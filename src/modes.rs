@@ -21,7 +21,7 @@ pub enum PollingMode {
     /// use std::time::Duration;
     /// use configcat::{Client, PollingMode};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)));
     /// ```
     AutoPoll(Duration),
@@ -33,7 +33,7 @@ pub enum PollingMode {
     /// use std::time::Duration;
     /// use configcat::{Client, PollingMode};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .polling_mode(PollingMode::LazyLoad(Duration::from_secs(60)));
     /// ```
     LazyLoad(Duration),
@@ -45,7 +45,7 @@ pub enum PollingMode {
     /// use std::time::Duration;
     /// use configcat::{Client, PollingMode};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .polling_mode(PollingMode::Manual);
     /// ```
     Manual,

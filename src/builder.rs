@@ -4,7 +4,7 @@ use crate::errors::{ClientError, ErrorKind};
 use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
 use crate::r#override::{FlagOverrides, OptionalOverrides};
-use crate::{Client, ConfigCache, OverrideBehavior, OverrideDataSource};
+use crate::{Client, ConfigCache, OverrideBehavior, OverrideDataSource, User};
 use std::borrow::Borrow;
 use std::time::Duration;
 
@@ -17,6 +17,7 @@ pub struct Options {
     cache: Box<dyn ConfigCache>,
     overrides: Option<FlagOverrides>,
     polling_mode: PollingMode,
+    default_user: Option<User>,
 }
 
 impl Options {
@@ -51,6 +52,10 @@ impl Options {
     pub(crate) fn overrides(&self) -> &Option<FlagOverrides> {
         &self.overrides
     }
+
+    pub(crate) fn default_user(&self) -> &Option<User> {
+        &self.default_user
+    }
 }
 
 /// Builder to create ConfigCat [`Client`].
@@ -61,7 +66,7 @@ impl Options {
 /// use std::time::Duration;
 /// use configcat::{DataGovernance, Client, PollingMode};
 ///
-/// let builder = Client::builder("SDK_KEY")
+/// let builder = Client::builder("sdk-key")
 ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
 ///     .data_governance(DataGovernance::EU);
 ///
@@ -76,6 +81,7 @@ pub struct ClientBuilder {
     overrides: Option<FlagOverrides>,
     offline: bool,
     polling_mode: Option<PollingMode>,
+    default_user: Option<User>,
 }
 
 impl ClientBuilder {
@@ -92,6 +98,7 @@ impl ClientBuilder {
             polling_mode: None,
             data_governance: None,
             overrides: None,
+            default_user: None,
         }
     }
 
@@ -103,7 +110,7 @@ impl ClientBuilder {
     /// ```rust
     /// use configcat::Client;
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .offline(true);
     /// ```
     pub fn offline(mut self, offline: bool) -> Self {
@@ -120,7 +127,7 @@ impl ClientBuilder {
     /// use std::time::Duration;
     /// use configcat::Client;
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .http_timeout(Duration::from_secs(60));
     /// ```
     pub fn http_timeout(mut self, timeout: Duration) -> Self {
@@ -135,7 +142,7 @@ impl ClientBuilder {
     /// ```rust
     /// use configcat::Client;
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .base_url("https://custom-cdn-url.com");
     /// ```
     pub fn base_url(mut self, base_url: &str) -> Self {
@@ -151,7 +158,7 @@ impl ClientBuilder {
     /// ```rust
     /// use configcat::{DataGovernance, Client};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .data_governance(DataGovernance::EU);
     /// ```
     pub fn data_governance(mut self, data_governance: DataGovernance) -> Self {
@@ -166,7 +173,7 @@ impl ClientBuilder {
     /// ```rust
     /// use configcat::{ConfigCache, Client};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .cache(Box::new(CustomCache{}));
     ///
     /// struct CustomCache {}
@@ -196,11 +203,26 @@ impl ClientBuilder {
     /// use std::time::Duration;
     /// use configcat::{Client, PollingMode};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)));
     /// ```
     pub fn polling_mode(mut self, polling_mode: PollingMode) -> Self {
         self.polling_mode = Some(polling_mode);
+        self
+    }
+
+    /// Sets the default user, used as fallback when there's no user parameter is passed to the flag evaluation methods.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use configcat::{Client, User};
+    ///
+    /// let builder = Client::builder("sdk-key")
+    ///     .default_user(User::new("USER_IDENTIFIER"));
+    /// ```
+    pub fn default_user(mut self, user: User) -> Self {
+        self.default_user = Some(user);
         self
     }
 
@@ -216,7 +238,7 @@ impl ClientBuilder {
     /// use std::time::Duration;
     /// use configcat::{Client, MapDataSource, OverrideBehavior, PollingMode, Value};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .overrides(Box::new(MapDataSource::from([
     ///         ("flag", Value::Bool(true))
     ///     ])), OverrideBehavior::LocalOnly);
@@ -242,7 +264,7 @@ impl ClientBuilder {
     /// use std::time::Duration;
     /// use configcat::{DataGovernance, Client, PollingMode};
     ///
-    /// let builder = Client::builder("SDK_KEY")
+    /// let builder = Client::builder("sdk-key")
     ///     .polling_mode(PollingMode::AutoPoll(Duration::from_secs(60)))
     ///     .data_governance(DataGovernance::EU);
     ///
@@ -278,6 +300,7 @@ impl ClientBuilder {
             data_governance: self.data_governance.unwrap_or(DataGovernance::Global),
             http_timeout: self.http_timeout.unwrap_or(Duration::from_secs(30)),
             overrides: self.overrides,
+            default_user: self.default_user,
         }
     }
 
