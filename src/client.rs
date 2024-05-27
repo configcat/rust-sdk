@@ -260,7 +260,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user = self.options.default_user().clone();
+            eval_user.clone_from(self.options.default_user());
         }
         match self
             .eval_flag(
@@ -317,7 +317,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user = self.options.default_user().clone();
+            eval_user.clone_from(self.options.default_user());
         }
         match self
             .eval_flag(
@@ -374,7 +374,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user = self.options.default_user().clone();
+            eval_user.clone_from(self.options.default_user());
         }
         match self
             .eval_flag(
@@ -431,7 +431,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user = self.options.default_user().clone();
+            eval_user.clone_from(self.options.default_user());
         }
         match self
             .eval_flag(
@@ -488,7 +488,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user = self.options.default_user().clone();
+            eval_user.clone_from(self.options.default_user());
         }
         match self
             .eval_flag(&result.config().settings, key, &eval_user, None)
@@ -535,7 +535,7 @@ impl Client {
         let config_result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user = self.options.default_user().clone();
+            eval_user.clone_from(self.options.default_user());
         }
         let settings = &config_result.config().settings;
         let mut result = Vec::<EvaluationDetails<Option<Value>>>::with_capacity(settings.len());
