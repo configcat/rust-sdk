@@ -156,7 +156,20 @@ impl User {
         self
     }
 
-    pub(crate) fn get(&self, key: &str) -> Option<&UserValue> {
+    /// Returns a user attribute's [`UserValue`] identified by the given `key`.
+    ///
+    /// If the attribute doesn't exist, [`None`] is returned.
+    ///
+    /// # Examples:
+    ///
+    /// ```rust
+    /// use configcat::User;
+    ///
+    /// let user = User::new("user-id");
+    ///
+    /// assert_eq!("user-id", user.get(User::IDENTIFIER).unwrap().to_string().as_str());
+    /// ```
+    pub fn get(&self, key: &str) -> Option<&UserValue> {
         self.attributes.get(key)
     }
 }

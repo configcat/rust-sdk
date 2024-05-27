@@ -43,7 +43,7 @@ impl Client {
         }
     }
 
-    /// Create a new [`ClientBuilder`] used to build a [`Client`].
+    /// Creates a new [`ClientBuilder`] used to build a [`Client`].
     ///
     /// # Errors
     ///
@@ -65,7 +65,7 @@ impl Client {
         ClientBuilder::new(sdk_key)
     }
 
-    /// Create a new [`Client`] with default options.
+    /// Creates a new [`Client`] with default options.
     ///
     /// # Errors
     ///
@@ -82,7 +82,7 @@ impl Client {
         ClientBuilder::new(sdk_key).build()
     }
 
-    /// Initiate a force refresh on the cached config JSON data.
+    /// Initiates a force refresh on the cached config JSON data.
     ///
     /// # Errors
     ///
@@ -123,7 +123,7 @@ impl Client {
         self.service.refresh().await
     }
 
-    /// Evaluate a bool flag identified by the given `key`.
+    /// Evaluates a bool flag identified by the given `key`.
     ///
     /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
     ///
@@ -144,7 +144,7 @@ impl Client {
         self.get_bool_details(key, user, default).await.value
     }
 
-    /// Evaluate a whole number setting identified by the given `key`.
+    /// Evaluates a whole number setting identified by the given `key`.
     ///
     /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
     ///
@@ -165,7 +165,7 @@ impl Client {
         self.get_int_details(key, user, default).await.value
     }
 
-    /// Evaluate a decimal number setting identified by the given `key`.
+    /// Evaluates a decimal number setting identified by the given `key`.
     ///
     /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
     ///
@@ -186,7 +186,7 @@ impl Client {
         self.get_float_details(key, user, default).await.value
     }
 
-    /// Evaluate a string setting identified by the given `key`.
+    /// Evaluates a string setting identified by the given `key`.
     ///
     /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
     ///
@@ -463,7 +463,7 @@ impl Client {
         }
     }
 
-    /// Evaluate a feature flag identified by the given `key`.
+    /// Evaluates a feature flag identified by the given `key`.
     ///
     /// Returns an [`EvaluationDetails`] that contains the evaluated feature flag's value in a [`Value`] variant.
     ///
