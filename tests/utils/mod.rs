@@ -1,5 +1,5 @@
 use log::kv::Key;
-use log::{Level, Log, Metadata, Record};
+use log::{set_max_level, Level, Log, Metadata, Record};
 use rand::distributions::{Alphanumeric, DistString};
 use std::cell::RefCell;
 
@@ -71,4 +71,9 @@ impl Log for RecordingLogger {
     }
 
     fn flush(&self) {}
+}
+
+pub fn log_record_init() {
+    set_max_level(log::LevelFilter::Info);
+    _ = log::set_logger(&RecordingLogger {});
 }

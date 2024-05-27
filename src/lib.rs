@@ -42,4 +42,4 @@ pub use builder::ClientBuilder;
 pub use modes::PollingMode;
 
 pub use user::{User, UserValue};
-pub use value::Value;
+pub use value::{Value, ValuePrimitive};

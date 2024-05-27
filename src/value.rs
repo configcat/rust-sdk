@@ -143,8 +143,26 @@ impl OptionalValueDisplay for Option<Value> {
     }
 }
 
-from_val_to_enum!(Value String String);
+/// Represents a primitive type that can describe the value of a feature flag or setting.
+pub trait ValuePrimitive: Into<Value> {
+    /// Reads the primitive value from a [`Value`].
+    fn from_value(value: &Value) -> Option<Self>;
+}
+
+macro_rules! primitive_impl {
+    ($ob:ident $to:ident $as_m:ident $t:ty) => (
+        from_val_to_enum!($ob $to $t);
+
+        impl ValuePrimitive for $t {
+            fn from_value(value: &Value) -> Option<Self> {
+                value.$as_m()
+            }
+        }
+    )
+}
+
+primitive_impl!(Value String as_str String);
+primitive_impl!(Value Float as_float f64);
+primitive_impl!(Value Int as_int i64);
+primitive_impl!(Value Bool as_bool bool);
 from_val_to_enum_into!(Value String &str);
-from_val_to_enum!(Value Bool bool);
-from_val_to_enum!(Value Float f64);
-from_val_to_enum!(Value Int i64);

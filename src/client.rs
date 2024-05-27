@@ -4,9 +4,10 @@ use crate::eval::details::EvaluationDetails;
 use crate::eval::evaluator::{eval, EvalResult};
 use crate::fetch::service::ConfigService;
 use crate::r#override::OptionalOverrides;
-use crate::value::{OptionalValueDisplay, Value};
+use crate::value::{OptionalValueDisplay, Value, ValuePrimitive};
 use crate::{ClientError, Setting, User};
 use log::{error, warn};
+use std::any::type_name;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -26,7 +27,7 @@ use std::sync::Arc;
 ///         .unwrap();
 ///
 ///     let user = User::new("user-id");
-///     let is_flag_enabled = client.get_bool_value("flag-key", Some(user), false).await;
+///     let is_flag_enabled = client.get_value("flag-key", Some(user), false).await;
 /// }
 /// ```
 pub struct Client {
@@ -100,7 +101,7 @@ impl Client {
     /// async fn main() {
     ///     let client = Client::new("sdk-key").unwrap();
     ///
-    ///     _ = client.refresh().await
+    ///     let result = client.refresh().await.unwrap();
     /// }
     /// ```
     pub async fn refresh(&self) -> Result<(), ClientError> {
@@ -123,7 +124,7 @@ impl Client {
         self.service.refresh().await
     }
 
-    /// Evaluates a bool flag identified by the given `key`.
+    /// Evaluates a feature flag or setting identified by the given `key`.
     ///
     /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
     ///
@@ -137,163 +138,20 @@ impl Client {
     ///     let client = Client::new("sdk-key").unwrap();
     ///
     ///     let user = User::new("user-id");
-    ///     let value = client.get_bool_value("flag-key", Some(user), false).await;
+    ///     let value = client.get_value("flag-key", Some(user), false).await;
     /// }
     /// ```
-    pub async fn get_bool_value(&self, key: &str, user: Option<User>, default: bool) -> bool {
-        self.get_bool_details(key, user, default).await.value
-    }
-
-    /// Evaluates a whole number setting identified by the given `key`.
-    ///
-    /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let value = client.get_int_value("flag-key", Some(user), 0).await;
-    /// }
-    /// ```
-    pub async fn get_int_value(&self, key: &str, user: Option<User>, default: i64) -> i64 {
-        self.get_int_details(key, user, default).await.value
-    }
-
-    /// Evaluates a decimal number setting identified by the given `key`.
-    ///
-    /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let value = client.get_float_value("flag-key", Some(user), 0.0).await;
-    /// }
-    /// ```
-    pub async fn get_float_value(&self, key: &str, user: Option<User>, default: f64) -> f64 {
-        self.get_float_details(key, user, default).await.value
-    }
-
-    /// Evaluates a string setting identified by the given `key`.
-    ///
-    /// Returns `default` if the flag doesn't exist, or there was an error during the evaluation.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let value = client.get_str_value("flag-key", Some(user), String::default()).await;
-    /// }
-    /// ```
-    pub async fn get_str_value(&self, key: &str, user: Option<User>, default: String) -> String {
-        self.get_str_details(key, user, default).await.value
-    }
-
-    /// Evaluates all feature flags and settings.
-    ///
-    /// Returns a [`HashMap`] of [`String`] keys and evaluated [`Value`]s.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let values = client.get_all_values(Some(user)).await;
-    /// }
-    /// ```
-    pub async fn get_all_values(&self, user: Option<User>) -> HashMap<String, Value> {
-        let details = self.get_all_details(user).await;
-        let mut result = HashMap::<String, Value>::with_capacity(details.len());
-        for detail in details {
-            if let Some(val) = detail.value {
-                result.insert(detail.key, val);
-            }
-        }
-        result
-    }
-
-    /// The same as [`Client::get_bool_value`] but returns an [`EvaluationDetails`] which
-    /// contains additional information about the evaluation process's result.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let details = client.get_bool_details("flag-key", Some(user), false).await;
-    /// }
-    /// ```
-    pub async fn get_bool_details(
+    pub async fn get_value<T: ValuePrimitive + Clone + Default>(
         &self,
         key: &str,
         user: Option<User>,
-        default: bool,
-    ) -> EvaluationDetails<bool> {
-        let result = self.service.config().await;
-        let mut eval_user = user;
-        if eval_user.is_none() {
-            eval_user.clone_from(self.options.default_user());
-        }
-        match self
-            .eval_flag(
-                &result.config().settings,
-                key,
-                &eval_user,
-                Some(default.into()),
-            )
-            .await
-        {
-            Ok(eval_result) => match eval_result.value.as_bool() {
-                Some(val) => EvaluationDetails {
-                    value: val,
-                    key: key.to_owned(),
-                    user: eval_user,
-                    fetch_time: Some(*result.fetch_time()),
-                    ..eval_result.into()
-                },
-                None => {
-                    let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was 'bool'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type));
-                    error!(event_id = err.kind.as_u8(); "{}", err);
-                    EvaluationDetails::from_err(default, key, eval_user, err)
-                }
-            },
-            Err(err) => {
-                error!(event_id = err.kind.as_u8(); "{}", err);
-                EvaluationDetails::from_err(default, key, eval_user, err)
-            }
-        }
+        default: T,
+    ) -> T {
+        self.get_value_details(key, user, default).await.value
     }
 
-    /// The same as [`Client::get_int_value`] but returns an [`EvaluationDetails`] which
-    /// contains additional information about the evaluation process's result.
+    /// The same as [`Client::get_value`] but returns an [`EvaluationDetails`] that
+    /// contains additional information about the result of the evaluation process.
     ///
     /// # Examples
     ///
@@ -305,129 +163,15 @@ impl Client {
     ///     let client = Client::new("sdk-key").unwrap();
     ///
     ///     let user = User::new("user-id");
-    ///     let details = client.get_int_details("flag-key", Some(user), 0).await;
+    ///     let details = client.get_value_details("flag-key", Some(user), String::default()).await;
     /// }
     /// ```
-    pub async fn get_int_details(
+    pub async fn get_value_details<T: ValuePrimitive + Clone + Default>(
         &self,
         key: &str,
         user: Option<User>,
-        default: i64,
-    ) -> EvaluationDetails<i64> {
-        let result = self.service.config().await;
-        let mut eval_user = user;
-        if eval_user.is_none() {
-            eval_user.clone_from(self.options.default_user());
-        }
-        match self
-            .eval_flag(
-                &result.config().settings,
-                key,
-                &eval_user,
-                Some(default.into()),
-            )
-            .await
-        {
-            Ok(eval_result) => match eval_result.value.as_int() {
-                Some(val) => EvaluationDetails {
-                    value: val,
-                    key: key.to_owned(),
-                    user: eval_user,
-                    fetch_time: Some(*result.fetch_time()),
-                    ..eval_result.into()
-                },
-                None => {
-                    let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was 'i64'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type));
-                    error!(event_id = err.kind.as_u8(); "{}", err);
-                    EvaluationDetails::from_err(default, key, eval_user, err)
-                }
-            },
-            Err(err) => {
-                error!(event_id = err.kind.as_u8(); "{}", err);
-                EvaluationDetails::from_err(default, key, eval_user, err)
-            }
-        }
-    }
-
-    /// The same as [`Client::get_float_value`] but returns an [`EvaluationDetails`] which
-    /// contains additional information about the evaluation process's result.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let details = client.get_float_details("flag-key", Some(user), 0.0).await;
-    /// }
-    /// ```
-    pub async fn get_float_details(
-        &self,
-        key: &str,
-        user: Option<User>,
-        default: f64,
-    ) -> EvaluationDetails<f64> {
-        let result = self.service.config().await;
-        let mut eval_user = user;
-        if eval_user.is_none() {
-            eval_user.clone_from(self.options.default_user());
-        }
-        match self
-            .eval_flag(
-                &result.config().settings,
-                key,
-                &eval_user,
-                Some(default.into()),
-            )
-            .await
-        {
-            Ok(eval_result) => match eval_result.value.as_float() {
-                Some(val) => EvaluationDetails {
-                    value: val,
-                    key: key.to_owned(),
-                    user: eval_user,
-                    fetch_time: Some(*result.fetch_time()),
-                    ..eval_result.into()
-                },
-                None => {
-                    let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was 'f64'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type));
-                    error!(event_id = err.kind.as_u8(); "{}", err);
-                    EvaluationDetails::from_err(default, key, eval_user, err)
-                }
-            },
-            Err(err) => {
-                error!(event_id = err.kind.as_u8(); "{}", err);
-                EvaluationDetails::from_err(default, key, eval_user, err)
-            }
-        }
-    }
-
-    /// The same as [`Client::get_str_value`] but returns an [`EvaluationDetails`] which
-    /// contains additional information about the evaluation process's result.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use configcat::{Client, User};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = Client::new("sdk-key").unwrap();
-    ///
-    ///     let user = User::new("user-id");
-    ///     let details = client.get_str_details("flag-key", Some(user), String::default()).await;
-    /// }
-    /// ```
-    pub async fn get_str_details(
-        &self,
-        key: &str,
-        user: Option<User>,
-        default: String,
-    ) -> EvaluationDetails<String> {
+        default: T,
+    ) -> EvaluationDetails<T> {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
@@ -442,7 +186,7 @@ impl Client {
             )
             .await
         {
-            Ok(eval_result) => match eval_result.value.as_str() {
+            Ok(eval_result) => match T::from_value(&eval_result.value) {
                 Some(val) => EvaluationDetails {
                     value: val,
                     key: key.to_owned(),
@@ -451,7 +195,7 @@ impl Client {
                     ..eval_result.into()
                 },
                 None => {
-                    let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was 'String'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type));
+                    let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was '{}'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type, type_name::<T>()));
                     error!(event_id = err.kind.as_u8(); "{}", err);
                     EvaluationDetails::from_err(default, key, eval_user, err)
                 }
@@ -512,8 +256,37 @@ impl Client {
         }
     }
 
+    /// Evaluates all feature flags and settings.
+    ///
+    /// Returns a [`HashMap`] of [`String`] keys and evaluated [`Value`]s.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, User};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("sdk-key").unwrap();
+    ///
+    ///     let user = User::new("user-id");
+    ///     let values = client.get_all_values(Some(user)).await;
+    /// }
+    /// ```
+    pub async fn get_all_values(&self, user: Option<User>) -> HashMap<String, Value> {
+        let details = self.get_all_details(user).await;
+        let mut result = HashMap::<String, Value>::with_capacity(details.len());
+        for detail in details {
+            if let Some(val) = detail.value {
+                result.insert(detail.key, val);
+            }
+        }
+        result
+    }
+
     /// The same as [`Client::get_all_values`] but returns a [`Vec`] of [`EvaluationDetails`] that
-    /// contains the evaluated feature flag values in a [`Value`] variant.
+    /// contains additional information about each evaluation process and the evaluated
+    /// feature flag values in [`Value`] variants.
     ///
     /// # Examples
     ///

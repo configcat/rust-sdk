@@ -1003,7 +1003,7 @@ fn eval_array_contains(
 }
 
 fn log_user_missing(key: &str) {
-    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_[type]_value()`/`get_[type]_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_value()`/`get_value_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
 }
 
 fn log_attr_missing(key: &str, attr: &str, cond_str: &str) {

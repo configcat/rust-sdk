@@ -15,7 +15,7 @@ use std::sync::Arc;
 ///     let client = Client::new("sdk-key").unwrap();
 ///
 ///     let user = User::new("user-id");
-///     let details = client.get_bool_details("flag-key", Some(user), false).await;
+///     let details = client.get_value_details("flag-key", Some(user), false).await;
 ///     
 ///     let flag_val = details.value;
 ///     let fetch_time = details.fetch_time.unwrap();

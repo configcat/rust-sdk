@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::utils::{construct_bool_json_payload, produce_mock_path};
 use configcat::OverrideBehavior::{LocalOnly, LocalOverRemote, RemoteOverLocal};
 use configcat::Value::{Bool, Float, Int};
@@ -9,22 +11,22 @@ mod utils;
 async fn file_simple() {
     let client = Client::builder("local").overrides(Box::new(FileDataSource::new("tests/data/test_json_simple.json").unwrap()), LocalOnly).build().unwrap();
 
-    assert!(client.get_bool_value("enabledFeature", None, false).await);
-    assert!(!client.get_bool_value("disabledFeature", None, true).await);
-    assert_eq!(client.get_int_value("intSetting", None, 0).await, 5);
-    assert_eq!(client.get_float_value("doubleSetting", None, 0.0).await, 1.2);
-    assert_eq!(client.get_str_value("stringSetting", None, String::default()).await, "test".to_owned());
+    assert!(client.get_value("enabledFeature", None, false).await);
+    assert!(!client.get_value("disabledFeature", None, true).await);
+    assert_eq!(client.get_value("intSetting", None, 0).await, 5);
+    assert_eq!(client.get_value("doubleSetting", None, 0.0).await, 1.2);
+    assert_eq!(client.get_value("stringSetting", None, String::default()).await, "test".to_owned());
 }
 
 #[tokio::test]
 async fn file_complex() {
     let client = Client::builder("local").overrides(Box::new(FileDataSource::new("tests/data/test_json_complex.json").unwrap()), LocalOnly).build().unwrap();
 
-    assert!(client.get_bool_value("enabledFeature", None, false).await);
-    assert!(!client.get_bool_value("disabledFeature", None, true).await);
-    assert_eq!(client.get_int_value("intSetting", None, 0).await, 5);
-    assert_eq!(client.get_float_value("doubleSetting", None, 0.0).await, 1.2);
-    assert_eq!(client.get_str_value("stringSetting", None, String::default()).await, "test".to_owned());
+    assert!(client.get_value("enabledFeature", None, false).await);
+    assert!(!client.get_value("disabledFeature", None, true).await);
+    assert_eq!(client.get_value("intSetting", None, 0).await, 5);
+    assert_eq!(client.get_value("doubleSetting", None, 0.0).await, 1.2);
+    assert_eq!(client.get_value("stringSetting", None, String::default()).await, "test".to_owned());
 }
 
 #[tokio::test]
@@ -47,11 +49,11 @@ async fn map() {
         .build()
         .unwrap();
 
-    assert!(client.get_bool_value("enabledFeature", None, false).await);
-    assert!(!client.get_bool_value("disabledFeature", None, true).await);
-    assert_eq!(client.get_int_value("intSetting", None, 0).await, 5);
-    assert_eq!(client.get_float_value("doubleSetting", None, 0.0).await, 1.2);
-    assert_eq!(client.get_str_value("stringSetting", None, String::default()).await, "test".to_owned());
+    assert!(client.get_value("enabledFeature", None, false).await);
+    assert!(!client.get_value("disabledFeature", None, true).await);
+    assert_eq!(client.get_value("intSetting", None, 0).await, 5);
+    assert_eq!(client.get_value("doubleSetting", None, 0.0).await, 1.2);
+    assert_eq!(client.get_value("stringSetting", None, String::default()).await, "test".to_owned());
 
     m.assert_async().await;
 }
@@ -68,8 +70,8 @@ async fn local_over_remote() {
         .build()
         .unwrap();
 
-    assert!(client.get_bool_value("fakeKey", None, false).await);
-    assert!(client.get_bool_value("nonexisting", None, false).await);
+    assert!(client.get_value("fakeKey", None, false).await);
+    assert!(client.get_value("nonexisting", None, false).await);
 
     m.assert_async().await;
 }
@@ -86,8 +88,8 @@ async fn remote_over_local() {
         .build()
         .unwrap();
 
-    assert!(!client.get_bool_value("fakeKey", None, false).await);
-    assert!(client.get_bool_value("nonexisting", None, false).await);
+    assert!(!client.get_value("fakeKey", None, false).await);
+    assert!(client.get_value("nonexisting", None, false).await);
 
     m.assert_async().await;
 }

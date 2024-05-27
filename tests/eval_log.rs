@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use log::set_max_level;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -8,18 +7,13 @@ use std::fs;
 use configcat::OverrideBehavior::{LocalOnly, LocalOverRemote};
 use configcat::{Client, FileDataSource, MapDataSource, PollingMode, User, UserValue, Value};
 
-use crate::utils::{rand_sdk_key, RecordingLogger};
+use crate::utils::{log_record_init, rand_sdk_key, RecordingLogger};
 
 mod utils;
 
-fn init() {
-    set_max_level(log::LevelFilter::Info);
-    _ = log::set_logger(&RecordingLogger {});
-}
-
 #[tokio::test]
 async fn prerequisite_circular_deps() {
-    init();
+    log_record_init();
 
     let tests = vec![("key1", "'key1' -> 'key1'"), ("key2", "'key2' -> 'key3' -> 'key2'"), ("key4", "'key4' -> 'key3' -> 'key2' -> 'key3'")];
 
@@ -34,7 +28,7 @@ async fn prerequisite_circular_deps() {
 
 #[tokio::test]
 async fn prerequisite_comp_val_mismatch() {
-    init();
+    log_record_init();
 
     let tests: Vec<(&str, &str, Value, Option<&str>)> = vec![
         ("stringDependsOnBool", "mainBoolFlag", Value::Bool(true), Some("Dog")),
@@ -76,7 +70,7 @@ async fn prerequisite_comp_val_mismatch() {
 
 #[tokio::test]
 async fn eval_log() {
-    init();
+    log_record_init();
 
     let suites: Vec<&str> = vec![
         "1_targeting_rule",
@@ -121,25 +115,8 @@ async fn eval_log() {
             }
             let user: Option<User> = test.user.map(user_from_json);
 
-            let def_val = Value::from_json_val(&test.default_val).unwrap();
-            match def_val {
-                Value::Bool(val) => {
-                    let result = client.get_bool_value(test.key.as_str(), user, val).await;
-                    assert_eq!(result, Value::from_json_val(&test.return_val).unwrap().as_bool().unwrap())
-                }
-                Value::Int(val) => {
-                    let result = client.get_int_value(test.key.as_str(), user, val).await;
-                    assert_eq!(result, Value::from_json_val(&test.return_val).unwrap().as_int().unwrap())
-                }
-                Value::Float(val) => {
-                    let result = client.get_float_value(test.key.as_str(), user, val).await;
-                    assert_eq!(result, Value::from_json_val(&test.return_val).unwrap().as_float().unwrap())
-                }
-                Value::String(val) => {
-                    let result = client.get_str_value(test.key.as_str(), user, val).await;
-                    assert_eq!(result, Value::from_json_val(&test.return_val).unwrap().as_str().unwrap())
-                }
-            }
+            let result = client.get_flag_details(test.key.as_str(), user).await;
+            assert_eq!(result.value.unwrap(), Value::from_json_val(&test.return_val).unwrap());
 
             let mut logs = RecordingLogger::LOGS.take();
             if has_user {

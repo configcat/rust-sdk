@@ -19,51 +19,23 @@ async fn default_user_flag() {
 }
 
 #[tokio::test]
-async fn default_user_bool() {
+async fn default_user_value() {
     let client = client_builder().default_user(User::new("id1")).build().unwrap();
-    let details_without_user = client.get_bool_details("disabledFeature", None, false).await;
+    let details_without_user = client.get_value_details("disabledFeature", None, false).await;
 
     assert_eq!("id1", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 
-    let details = client.get_bool_details("disabledFeature", Some(User::new("id2")), false).await;
+    let details = client.get_value_details("disabledFeature", Some(User::new("id2")), false).await;
 
     assert_eq!("id2", details.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 }
 
 #[tokio::test]
-async fn default_user_str() {
-    let client = client_builder().default_user(User::new("id1")).build().unwrap();
-    let details_without_user = client.get_str_details("stringSetting", None, String::default()).await;
+async fn default_value_type_mismatch() {
+    let client = client_builder().build().unwrap();
+    let value = client.get_value("disabledFeature", None, "def".to_owned()).await;
 
-    assert_eq!("id1", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
-
-    let details = client.get_str_details("stringSetting", Some(User::new("id2")), String::default()).await;
-
-    assert_eq!("id2", details.user.unwrap()[User::IDENTIFIER].to_string().as_str());
-}
-
-#[tokio::test]
-async fn default_user_int() {
-    let client = client_builder().default_user(User::new("id1")).build().unwrap();
-    let details_without_user = client.get_int_details("intSetting", None, 0).await;
-
-    assert_eq!("id1", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
-
-    let details = client.get_int_details("intSetting", Some(User::new("id2")), 0).await;
-
-    assert_eq!("id2", details.user.unwrap()[User::IDENTIFIER].to_string().as_str());
-}
-
-#[tokio::test]
-async fn default_user_float() {
-    let client = client_builder().default_user(User::new("id1")).build().unwrap();
-    let details_without_user = client.get_float_details("doubleSetting", None, 0.0).await;
-
-    assert_eq!("id1", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
-
-    let details = client.get_float_details("doubleSetting", Some(User::new("id2")), 0.0).await;
-
-    assert_eq!("id2", details.user.unwrap()[User::IDENTIFIER].to_string().as_str());
+    assert_eq!(value, "def");
 }
 
 #[tokio::test]
