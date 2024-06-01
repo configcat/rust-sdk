@@ -36,11 +36,14 @@ pub struct Client {
 }
 
 impl Client {
-    pub(crate) fn with_options(options: Options) -> Self {
+    pub(crate) fn with_options(options: Options) -> Result<Self, ClientError> {
         let opts = Arc::new(options);
-        Self {
-            options: Arc::clone(&opts),
-            service: ConfigService::new(Arc::clone(&opts)),
+        match ConfigService::new(Arc::clone(&opts)) {
+            Ok(service) => Ok(Self {
+                options: Arc::clone(&opts),
+                service,
+            }),
+            Err(err) => Err(err),
         }
     }
 

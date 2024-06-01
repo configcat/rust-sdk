@@ -285,7 +285,7 @@ impl ClientBuilder {
                 format!("SDK Key '{}' is invalid.", self.sdk_key),
             ));
         }
-        Ok(Client::with_options(self.build_options()))
+        Client::with_options(self.build_options())
     }
 
     pub(crate) fn build_options(self) -> Options {

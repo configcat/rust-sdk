@@ -69,46 +69,52 @@ impl ConfigService {
     const GLOBAL_CDN_URL: &'static str = "https://cdn-global.configcat.com";
     const EU_CDN_URL: &'static str = "https://cdn-eu.configcat.com";
 
-    pub fn new(opts: Arc<Options>) -> Self {
-        let service = Self {
-            state: Arc::new(ServiceState {
-                cache_key: sha1(
-                    format!(
-                        "{}_{CONFIG_FILE_NAME}_{SERIALIZATION_FORMAT_VERSION}",
-                        opts.sdk_key()
-                    )
-                    .as_str(),
-                ),
-                fetcher: Fetcher::new(
-                    opts.base_url()
-                        .clone()
-                        .unwrap_or_else(|| match *opts.data_governance() {
-                            DataGovernance::Global => Self::GLOBAL_CDN_URL.to_owned(),
-                            DataGovernance::EU => Self::EU_CDN_URL.to_owned(),
-                        }),
-                    !opts.base_url().is_none(),
-                    opts.sdk_key(),
-                    opts.polling_mode().mode_identifier(),
-                    *opts.http_timeout(),
-                ),
-                offline: AtomicBool::new(opts.offline()),
-                initialized: AtomicBool::new(false),
-                init: Once::new(),
-                cached_entry: Arc::new(tokio::sync::Mutex::new(ConfigEntry::default())),
-            }),
-            options: opts,
-            cancellation_token: CancellationToken::new(),
-            close: Once::new(),
-        };
-        match service.options.polling_mode() {
-            PollingMode::AutoPoll(interval)
-                if !service.options.offline() && !service.options.overrides().is_local() =>
-            {
-                service.start_poll(*interval)
+    pub fn new(opts: Arc<Options>) -> Result<Self, ClientError> {
+        match Fetcher::new(
+            opts.base_url()
+                .clone()
+                .unwrap_or_else(|| match *opts.data_governance() {
+                    DataGovernance::Global => Self::GLOBAL_CDN_URL.to_owned(),
+                    DataGovernance::EU => Self::EU_CDN_URL.to_owned(),
+                }),
+            !opts.base_url().is_none(),
+            opts.sdk_key(),
+            opts.polling_mode().mode_identifier(),
+            *opts.http_timeout(),
+        ) {
+            Ok(fetcher) => {
+                let service = Self {
+                    state: Arc::new(ServiceState {
+                        cache_key: sha1(
+                            format!(
+                                "{}_{CONFIG_FILE_NAME}_{SERIALIZATION_FORMAT_VERSION}",
+                                opts.sdk_key()
+                            )
+                            .as_str(),
+                        ),
+                        fetcher,
+                        offline: AtomicBool::new(opts.offline()),
+                        initialized: AtomicBool::new(false),
+                        init: Once::new(),
+                        cached_entry: Arc::new(tokio::sync::Mutex::new(ConfigEntry::default())),
+                    }),
+                    options: opts,
+                    cancellation_token: CancellationToken::new(),
+                    close: Once::new(),
+                };
+                match service.options.polling_mode() {
+                    PollingMode::AutoPoll(interval)
+                        if !service.options.offline()
+                            && !service.options.overrides().is_local() =>
+                    {
+                        service.start_poll(*interval)
+                    }
+                    _ => service.state.initialized(),
+                }
+                Ok(service)
             }
-            _ => service.state.initialized(),
+            Err(err) => Err(err),
         }
-        service
     }
 
     pub async fn config(&self) -> ConfigResult {
@@ -282,7 +288,7 @@ mod service_tests {
                     .polling_mode(PollingMode::Manual)
                     .build_options(),
             );
-            let service = ConfigService::new(opts);
+            let service = ConfigService::new(opts).unwrap();
             assert_eq!(
                 service.state.cache_key.as_str(),
                 "f83ba5d45bceb4bb704410f51b704fb6dfa19942"
@@ -294,7 +300,7 @@ mod service_tests {
                     .polling_mode(PollingMode::Manual)
                     .build_options(),
             );
-            let service = ConfigService::new(opts);
+            let service = ConfigService::new(opts).unwrap();
             assert_eq!(
                 service.state.cache_key.as_str(),
                 "da7bfd8662209c8ed3f9db96daed4f8d91ba5876"
@@ -312,7 +318,7 @@ mod service_tests {
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -339,7 +345,7 @@ mod service_tests {
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -365,7 +371,7 @@ mod service_tests {
             PollingMode::LazyLoad(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -402,7 +408,7 @@ mod service_tests {
             PollingMode::LazyLoad(Duration::from_millis(100)),
             None,
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -428,7 +434,7 @@ mod service_tests {
         let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
         let opts = create_options(server.url(), PollingMode::Manual, None);
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         assert!(result.config().settings.is_empty());
@@ -474,7 +480,7 @@ mod service_tests {
                 "etag1",
             )))),
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -507,7 +513,7 @@ mod service_tests {
                 "etag1",
             )))),
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -536,7 +542,7 @@ mod service_tests {
             PollingMode::AutoPoll(Duration::from_millis(100)),
             Some(Box::new(SingleValueCache::new(String::default()))),
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
         let setting = &result.config().settings["testKey"];
@@ -562,7 +568,7 @@ mod service_tests {
                 .offline(true)
                 .build_options(),
         );
-        let service = ConfigService::new(opts);
+        let service = ConfigService::new(opts).unwrap();
 
         tokio::time::sleep(Duration::from_millis(500)).await;
 

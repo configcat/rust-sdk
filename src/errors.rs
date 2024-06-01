@@ -6,6 +6,8 @@ use std::fmt::{Display, Formatter};
 pub enum ErrorKind {
     /// No error occurred.
     NoError,
+    /// Initialization of the internal [`reqwest::Client`] failed.
+    HttpClientInitFailure,
     /// The evaluation failed because the config JSON was not available locally.
     ConfigJsonNotAvailable = 1000,
     /// The evaluation failed because the key of the evaluated setting was not found in the config JSON.

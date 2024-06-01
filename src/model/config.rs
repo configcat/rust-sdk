@@ -300,7 +300,8 @@ impl Display for UserCondition {
         }
         if let Some(num) = self.float_val {
             return if self.comparator.is_date() {
-                let date = DateTime::from_timestamp_millis((num * 1000.0) as i64).unwrap();
+                let date =
+                    DateTime::from_timestamp_millis((num * 1000.0) as i64).unwrap_or_default();
                 write!(f, "'{num}' ({})", date.format("%Y-%m-%dT%H:%M:%S%.3f %Z"))
             } else {
                 write!(f, "'{num}'")
