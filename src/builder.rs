@@ -256,7 +256,9 @@ impl ClientBuilder {
     ///
     /// # Errors
     ///
-    /// This method fails if the given SDK key is empty or has an invalid format.
+    /// This method fails in the following cases:
+    /// - The given SDK key is empty or has an invalid format.
+    /// - The initialization of the internal [`reqwest::Client`] failed.
     ///
     /// # Examples
     ///

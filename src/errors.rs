@@ -42,7 +42,7 @@ impl ErrorKind {
     }
 }
 
-/// Error struct that holds the [ErrorKind] and message of the reported failure.
+/// Error struct that holds the [`ErrorKind`] and message of the reported failure.
 #[derive(Debug, PartialEq)]
 pub struct ClientError {
     /// Error kind that represents failures reported by the [`crate::Client`].
