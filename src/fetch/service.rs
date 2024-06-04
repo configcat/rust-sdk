@@ -148,6 +148,10 @@ impl ConfigService {
         self.close.call_once(|| self.cancellation_token.cancel());
     }
 
+    pub fn set_mode(&self, offline: bool) {
+        self.state.offline.store(offline, Ordering::SeqCst);
+    }
+
     fn start_poll(&self, interval: Duration) {
         let state = Arc::clone(&self.state);
         let opts = Arc::clone(&self.options);
@@ -575,6 +579,39 @@ mod service_tests {
         let result = service.config().await;
         assert!(result.config().settings.is_empty());
 
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn online_offline() {
+        let mut server = mockito::Server::new_async().await;
+        let mut m = create_success_mock(&mut server, 1).await;
+
+        let opts = Arc::new(
+            ClientBuilder::new(MOCK_KEY)
+                .base_url(server.url().as_str())
+                .polling_mode(PollingMode::Manual)
+                .build_options(),
+        );
+        let service = ConfigService::new(opts).unwrap();
+
+        _ = service.refresh().await;
+        m.assert_async().await;
+
+        service.set_mode(true);
+
+        m.remove_async().await;
+        m = create_success_mock(&mut server, 0).await;
+
+        _ = service.refresh().await;
+        m.assert_async().await;
+
+        service.set_mode(false);
+
+        m.remove_async().await;
+        m = create_success_mock(&mut server, 1).await;
+
+        _ = service.refresh().await;
         m.assert_async().await;
     }
 

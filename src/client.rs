@@ -365,6 +365,46 @@ impl Client {
         vec![]
     }
 
+    /// Puts the [`Client`] into offline mode.
+    ///
+    /// In this mode the SDK is not allowed to initiate HTTP request and works only from the configured cache.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::Client;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("sdk-key").unwrap();
+    ///
+    ///     client.offline();
+    /// }
+    /// ```
+    pub fn offline(&self) {
+        self.service.set_mode(true);
+    }
+
+    /// Puts the [`Client`] into online mode.
+    ///
+    /// In this mode the SDK initiates HTTP requests to fetch the latest config JSON data.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::Client;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::new("sdk-key").unwrap();
+    ///
+    ///     client.online();
+    /// }
+    /// ```
+    pub fn online(&self) {
+        self.service.set_mode(false);
+    }
+
     async fn eval_flag(
         &self,
         settings: &HashMap<String, Setting>,
