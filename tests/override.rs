@@ -3,7 +3,8 @@
 use crate::utils::{construct_bool_json_payload, produce_mock_path};
 use configcat::OverrideBehavior::{LocalOnly, LocalOverRemote, RemoteOverLocal};
 use configcat::Value::{Bool, Float, Int};
-use configcat::{Client, FileDataSource, MapDataSource, Value};
+use configcat::{Client, ClientCacheState, FileDataSource, MapDataSource, Value};
+use std::time::Duration;
 
 mod utils;
 
@@ -49,6 +50,7 @@ async fn map() {
         .build()
         .unwrap();
 
+    assert!(matches!(client.wait_for_ready(Duration::from_secs(5)).await.unwrap(), ClientCacheState::HasLocalOverrideFlagDataOnly));
     assert!(client.get_value("enabledFeature", None, false).await);
     assert!(!client.get_value("disabledFeature", None, true).await);
     assert_eq!(client.get_value("intSetting", None, 0).await, 5);

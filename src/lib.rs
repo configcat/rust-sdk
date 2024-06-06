@@ -30,7 +30,8 @@ pub use model::config::{
 };
 
 pub use model::enums::{
-    DataGovernance, PrerequisiteFlagComparator, SegmentComparator, SettingType, UserComparator,
+    ClientCacheState, DataGovernance, PrerequisiteFlagComparator, SegmentComparator, SettingType,
+    UserComparator,
 };
 
 pub use r#override::{

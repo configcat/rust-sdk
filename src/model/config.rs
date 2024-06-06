@@ -10,6 +10,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 
 const INVALID_VALUE_TXT: &str = "<invalid value>";
@@ -56,6 +57,10 @@ impl ConfigEntry {
             cache_str: "local".to_owned(),
             ..ConfigEntry::default()
         }
+    }
+
+    pub fn is_expired(&self, duration: Duration) -> bool {
+        Utc::now() - duration > self.fetch_time
     }
 }
 

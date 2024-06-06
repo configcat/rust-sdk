@@ -5,11 +5,13 @@ use crate::eval::evaluator::{eval, EvalResult};
 use crate::fetch::service::ConfigService;
 use crate::r#override::OptionalOverrides;
 use crate::value::{OptionalValueDisplay, Value, ValuePrimitive};
-use crate::{ClientError, Setting, User};
+use crate::{ClientCacheState, ClientError, Setting, User};
 use log::{error, warn};
 use std::any::type_name;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::timeout;
 
 /// The main component for evaluating feature flags and settings.
 ///
@@ -180,15 +182,12 @@ impl Client {
         if eval_user.is_none() {
             eval_user.clone_from(self.options.default_user());
         }
-        match self
-            .eval_flag(
-                &result.config().settings,
-                key,
-                &eval_user,
-                Some(default.clone().into()),
-            )
-            .await
-        {
+        match self.eval_flag(
+            &result.config().settings,
+            key,
+            &eval_user,
+            Some(default.clone().into()),
+        ) {
             Ok(eval_result) => match T::from_value(&eval_result.value) {
                 Some(val) => EvaluationDetails {
                     value: val,
@@ -237,10 +236,7 @@ impl Client {
         if eval_user.is_none() {
             eval_user.clone_from(self.options.default_user());
         }
-        match self
-            .eval_flag(&result.config().settings, key, &eval_user, None)
-            .await
-        {
+        match self.eval_flag(&result.config().settings, key, &eval_user, None) {
             Ok(eval_result) => EvaluationDetails {
                 value: Some(eval_result.value),
                 key: key.to_owned(),
@@ -317,7 +313,7 @@ impl Client {
         let mut result = Vec::<EvaluationDetails<Option<Value>>>::with_capacity(settings.len());
         for (k, _) in settings.iter() {
             let usr = eval_user.clone();
-            let details = match self.eval_flag(settings, k, &usr, None).await {
+            let details = match self.eval_flag(settings, k, &usr, None) {
                 Ok(eval_result) => EvaluationDetails {
                     value: Some(eval_result.value),
                     key: k.to_owned(),
@@ -405,7 +401,47 @@ impl Client {
         self.service.set_mode(false);
     }
 
-    async fn eval_flag(
+    /// Asynchronously waits for the initialization of the [`Client`] for a maximum duration specified in `wait_timeout`.
+    ///
+    /// This method fails if the initialization takes more time than the specified `wait_timeout`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, ClientCacheState};
+    /// use std::time::Duration;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///
+    ///     let client = Client::new("sdk-key").unwrap();
+    ///     let state = client.wait_for_ready(Duration::from_secs(5)).await.unwrap();
+    ///
+    ///     assert!(matches!(state, ClientCacheState::HasUpToDateFlagData));
+    /// }
+    /// ```
+    pub async fn wait_for_ready(
+        &self,
+        wait_timeout: Duration,
+    ) -> Result<ClientCacheState, ClientError> {
+        let init = timeout(wait_timeout, self.service.wait_for_init()).await;
+        match init {
+            Ok(state) => Ok(state),
+            Err(_) => {
+                let err = ClientError::new(
+                    ErrorKind::ClientInitTimedOut,
+                    format!(
+                        "Client initialization timed out after {}s.",
+                        wait_timeout.as_secs()
+                    ),
+                );
+                warn!(event_id = err.kind.as_u8(); "{}", err);
+                Err(err)
+            }
+        }
+    }
+
+    fn eval_flag(
         &self,
         settings: &HashMap<String, Setting>,
         key: &str,

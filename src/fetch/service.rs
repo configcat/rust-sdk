@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use log::warn;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::builder::Options;
@@ -16,7 +17,10 @@ use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
 use crate::r#override::OptionalOverrides;
 use crate::utils::sha1;
-use crate::OverrideBehavior;
+use crate::ClientCacheState::{
+    HasCachedFlagDataOnly, HasLocalOverrideFlagDataOnly, HasUpToDateFlagData, NoFlagData,
+};
+use crate::{ClientCacheState, OverrideBehavior};
 
 pub enum ServiceResult {
     Ok(ConfigResult),
@@ -49,12 +53,15 @@ struct ServiceState {
     offline: AtomicBool,
     initialized: AtomicBool,
     init: Once,
+    init_wait: Semaphore,
 }
 
 impl ServiceState {
     fn initialized(&self) {
-        self.init
-            .call_once(|| self.initialized.store(true, Ordering::SeqCst));
+        self.init.call_once(|| {
+            self.initialized.store(true, Ordering::SeqCst);
+            self.init_wait.add_permits(1);
+        });
     }
 }
 
@@ -96,6 +103,7 @@ impl ConfigService {
                         offline: AtomicBool::new(opts.offline()),
                         initialized: AtomicBool::new(false),
                         init: Once::new(),
+                        init_wait: Semaphore::new(0),
                         cached_entry: Arc::new(tokio::sync::Mutex::new(ConfigEntry::default())),
                     }),
                     options: opts,
@@ -150,6 +158,49 @@ impl ConfigService {
 
     pub fn set_mode(&self, offline: bool) {
         self.state.offline.store(offline, Ordering::SeqCst);
+    }
+
+    pub async fn wait_for_init(&self) -> ClientCacheState {
+        if !self.state.initialized.load(Ordering::SeqCst) {
+            _ = self.state.init_wait.acquire().await
+        }
+        self.determine_cache_state().await
+    }
+
+    async fn determine_cache_state(&self) -> ClientCacheState {
+        if self.options.overrides().is_local() {
+            return HasLocalOverrideFlagDataOnly;
+        }
+
+        let mut entry = self.state.cached_entry.lock().await;
+
+        match self.options.polling_mode() {
+            PollingMode::AutoPoll(interval) => {
+                if !entry.is_expired(*interval) {
+                    return HasUpToDateFlagData;
+                }
+                if entry.is_empty() {
+                    return NoFlagData;
+                }
+                HasCachedFlagDataOnly
+            }
+            _ => {
+                let from_cache =
+                    read_cache(&self.state, &self.options, &entry.cache_str).unwrap_or_default();
+                if !from_cache.is_empty() && *entry != from_cache {
+                    *entry = from_cache;
+                }
+                if let PollingMode::LazyLoad(interval) = self.options.polling_mode() {
+                    if !entry.is_expired(*interval) {
+                        return HasUpToDateFlagData;
+                    }
+                }
+                if entry.is_empty() {
+                    return NoFlagData;
+                }
+                HasCachedFlagDataOnly
+            }
+        }
     }
 
     fn start_poll(&self, interval: Duration) {
@@ -271,7 +322,7 @@ fn read_cache(
 #[cfg(test)]
 mod service_tests {
     use crate::cache::EmptyConfigCache;
-    use crate::ConfigCache;
+    use crate::{ClientCacheState, ConfigCache};
     use chrono::{DateTime, Utc};
     use mockito::{Mock, ServerGuard};
     use reqwest::header::{ETAG, IF_NONE_MATCH};
@@ -615,6 +666,126 @@ mod service_tests {
         m.assert_async().await;
     }
 
+    #[tokio::test]
+    async fn wait_for_init_cached() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_success_mock(&mut server, 0).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            Some(Box::new(SingleValueCache::new(construct_cache_payload(
+                "test",
+                Utc::now(),
+                "etag1",
+            )))),
+        );
+        let service = ConfigService::new(opts).unwrap();
+        let state = service.wait_for_init().await;
+
+        assert!(matches!(state, ClientCacheState::HasUpToDateFlagData));
+
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn wait_for_init_expired_fetch() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_success_mock(&mut server, 1).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            Some(Box::new(SingleValueCache::new(construct_cache_payload(
+                "test",
+                Utc::now() - Duration::from_secs(5),
+                "etag1",
+            )))),
+        );
+        let service = ConfigService::new(opts).unwrap();
+        let state = service.wait_for_init().await;
+
+        assert!(matches!(state, ClientCacheState::HasUpToDateFlagData));
+
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn wait_for_init_expired_fetch_fail() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_failure_mock(&mut server, 1).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            Some(Box::new(SingleValueCache::new(construct_cache_payload(
+                "test",
+                Utc::now() - Duration::from_secs(5),
+                "etag1",
+            )))),
+        );
+        let service = ConfigService::new(opts).unwrap();
+        let state = service.wait_for_init().await;
+
+        assert!(matches!(state, ClientCacheState::HasCachedFlagDataOnly));
+
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn wait_for_init_no_cache_fail() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_failure_mock_without_etag(&mut server, 1).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::AutoPoll(Duration::from_millis(100)),
+            None,
+        );
+        let service = ConfigService::new(opts).unwrap();
+        let state = service.wait_for_init().await;
+
+        assert!(matches!(state, ClientCacheState::NoFlagData));
+
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn wait_for_init_manual() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_failure_mock_without_etag(&mut server, 0).await;
+
+        let opts = create_options(
+            server.url(),
+            PollingMode::Manual,
+            Some(Box::new(SingleValueCache::new(construct_cache_payload(
+                "test",
+                Utc::now(),
+                "etag1",
+            )))),
+        );
+        let service = ConfigService::new(opts).unwrap();
+        let state = service.wait_for_init().await;
+
+        assert!(matches!(state, ClientCacheState::HasCachedFlagDataOnly));
+
+        m.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn wait_for_init_manual_fail() {
+        let mut server = mockito::Server::new_async().await;
+        let m = create_failure_mock_without_etag(&mut server, 0).await;
+
+        let opts = create_options(server.url(), PollingMode::Manual, None);
+        let service = ConfigService::new(opts).unwrap();
+        let state = service.wait_for_init().await;
+
+        assert!(matches!(state, ClientCacheState::NoFlagData));
+
+        m.assert_async().await;
+    }
+
     fn create_options(
         url: String,
         mode: PollingMode,
@@ -691,6 +862,15 @@ mod service_tests {
         server
             .mock("GET", MOCK_PATH)
             .match_header(IF_NONE_MATCH.as_str(), "etag1")
+            .with_status(502)
+            .expect_at_least(expect)
+            .create_async()
+            .await
+    }
+
+    async fn create_failure_mock_without_etag(server: &mut ServerGuard, expect: usize) -> Mock {
+        server
+            .mock("GET", MOCK_PATH)
             .with_status(502)
             .expect_at_least(expect)
             .create_async()

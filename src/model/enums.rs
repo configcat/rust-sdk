@@ -2,6 +2,18 @@ use crate::Value;
 use serde_repr::Deserialize_repr;
 use std::fmt::{Display, Formatter};
 
+/// Describes the internal state of the [`crate::Client`].
+pub enum ClientCacheState {
+    /// The SDK has no feature flag data neither from the cache nor from the ConfigCat CDN.
+    NoFlagData,
+    /// The SDK runs with local only feature flag data.
+    HasLocalOverrideFlagDataOnly,
+    /// The SDK has feature flag data to work with only from the cache.
+    HasCachedFlagDataOnly,
+    /// The SDK works with the latest feature flag data received from the ConfigCat CDN.
+    HasUpToDateFlagData,
+}
+
 /// Describes the location of your feature flag and setting data within the ConfigCat CDN.
 #[derive(Clone, PartialEq, Debug)]
 pub enum DataGovernance {
@@ -19,7 +31,7 @@ pub enum RedirectMode {
     Force,
 }
 
-/// The type of a feature flag or setting.
+/// The type of the feature flag or setting.
 #[derive(Debug, Clone, Deserialize_repr)]
 #[repr(u8)]
 pub enum SettingType {
