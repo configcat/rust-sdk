@@ -116,7 +116,7 @@ async fn eval_log() {
             let user: Option<User> = test.user.map(user_from_json);
 
             let result = client.get_flag_details(test.key.as_str(), user).await;
-            assert_eq!(result.value.unwrap(), Value::from_json_val(&test.return_val).unwrap());
+            assert_eq!(result.value.unwrap(), test.return_val);
 
             let mut logs = RecordingLogger::LOGS.take();
             if has_user {
@@ -134,7 +134,7 @@ struct TestCase {
     #[serde(rename = "defaultValue")]
     default_val: serde_json::Value,
     #[serde(rename = "returnValue")]
-    return_val: serde_json::Value,
+    return_val: Value,
     #[serde(rename = "expectedLog")]
     exp_log: String,
     #[serde(rename = "user")]

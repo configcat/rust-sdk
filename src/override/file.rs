@@ -26,7 +26,7 @@ use std::fs;
 #[derive(Deserialize)]
 pub struct SimplifiedConfig {
     /// The feature flag override JSON map.
-    pub flags: HashMap<String, serde_json::Value>,
+    pub flags: HashMap<String, Value>,
 }
 
 /// Data source that gets the overridden feature flag or setting values from a JSON file.
@@ -58,13 +58,8 @@ impl FileDataSource {
                 match simple_result {
                     Ok(simple_config) => {
                         let mut map: HashMap<String, Setting> = HashMap::new();
-                        for (k, v) in simple_config.flags.iter() {
-                            let val_result = Value::from_json_val(v);
-                            if let Some(val) = val_result {
-                                map.insert(k.clone(), val.into());
-                            } else {
-                                return Err(format!("Value of override '{k}' is invalid."));
-                            }
+                        for (k, value) in simple_config.flags.iter() {
+                            map.insert(k.clone(), value.into());
                         }
                         Ok(FileDataSource {
                             config: Config {

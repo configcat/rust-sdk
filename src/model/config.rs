@@ -222,10 +222,10 @@ pub struct Setting {
     pub(crate) salt: Option<String>,
 }
 
-impl From<Value> for Setting {
-    fn from(value: Value) -> Self {
+impl From<&Value> for Setting {
+    fn from(value: &Value) -> Self {
         Setting {
-            setting_type: (&value).into(),
+            setting_type: value.into(),
             value: value.into(),
             variation_id: None,
             percentage_options: None,
@@ -472,23 +472,23 @@ impl SettingValue {
     }
 }
 
-impl From<Value> for SettingValue {
-    fn from(value: Value) -> Self {
+impl From<&Value> for SettingValue {
+    fn from(value: &Value) -> Self {
         match value {
             Value::Bool(val) => SettingValue {
-                bool_val: Some(val),
+                bool_val: Some(*val),
                 ..SettingValue::default()
             },
             Value::Int(val) => SettingValue {
-                int_val: Some(val),
+                int_val: Some(*val),
                 ..SettingValue::default()
             },
             Value::Float(val) => SettingValue {
-                float_val: Some(val),
+                float_val: Some(*val),
                 ..SettingValue::default()
             },
             Value::String(val) => SettingValue {
-                string_val: Some(val),
+                string_val: Some(val.clone()),
                 ..SettingValue::default()
             },
         }
