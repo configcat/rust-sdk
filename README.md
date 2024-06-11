@@ -21,7 +21,7 @@ configcat = "0.1"
 ```
 
 ### 2. Go to the <a href="https://app.configcat.com/sdkkey" target="_blank">ConfigCat Dashboard</a> to get your *SDK Key*:
-![SDK-KEY](https://raw.githubusercontent.com/ConfigCat/rust-sdk/main/media/readme02-3.png  "SDK-KEY")
+![SDK-KEY](https://raw.githubusercontent.com/configcat/rust-sdk/main/media/readme02-3.png  "SDK-KEY")
 
 ### 3. Import the `configcat` module to your application
 ```rust
@@ -81,7 +81,7 @@ async fn main() {
 
 ## Example
 
-The repository contains an [example implementation](./examples/print_eval.rs) that you can run with:
+This repository contains a simple [example application](./examples/print_eval.rs) that you can run with:
 ```shell
 cargo run --example print_eval
 ```
