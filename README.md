@@ -1,6 +1,8 @@
 # ConfigCat SDK for Rust
 
 [![Build Status](https://github.com/configcat/rust-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/configcat/rust-sdk/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/configcat.svg?logo=rust)](https://crates.io/crates/configcat)
+[![docs.rs](https://img.shields.io/badge/docs.rs-configcat-66c2a5?logo=docs.rs)](https://docs.rs/configcat)
 
 ConfigCat SDK for Rust provides easy integration for your application to [ConfigCat](https://configcat.com).
 
