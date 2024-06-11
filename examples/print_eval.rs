@@ -1,28 +1,31 @@
-use std::time::Duration;
-use log::{Level, LevelFilter, Log, Metadata, Record};
-use log::kv::Key;
 use configcat::*;
+use log::kv::Key;
+use log::{Level, LevelFilter, Log, Metadata, Record};
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     // Info level logging helps to inspect the feature flag evaluation process.
     // Use the default Warning level to avoid too detailed logging in your application.
     log::set_max_level(LevelFilter::Info);
-    log::set_logger(&PrintLog{}).unwrap();
+    log::set_logger(&PrintLog {}).unwrap();
 
     let client = Client::builder("PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ")
         .polling_mode(PollingMode::AutoPoll(Duration::from_secs(5)))
         .build()
         .unwrap();
 
-    let is_awesome_enabled = client.get_value("isAwesomeFeatureEnabled", None, false).await;
+    let is_awesome_enabled = client
+        .get_value("isAwesomeFeatureEnabled", None, false)
+        .await;
 
     println!("isAwesomeFeatureEnabled: {is_awesome_enabled}");
 
-    let user = User::new("#SOME-USER-ID#")
-        .email("configcat@example.com");
+    let user = User::new("#SOME-USER-ID#").email("configcat@example.com");
 
-    let is_poc_enabled = client.get_value("isPOCFeatureEnabled", Some(user), false).await;
+    let is_poc_enabled = client
+        .get_value("isPOCFeatureEnabled", Some(user), false)
+        .await;
 
     println!("isPOCFeatureEnabled: {is_poc_enabled}");
 }
