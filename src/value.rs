@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 /// Represents the value of a feature flag or setting.
@@ -10,7 +11,8 @@ use std::fmt::{Display, Formatter};
 /// let bool_val = Value::Bool(true);
 /// let int_val = Value::Int(42);
 /// ```
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Value {
     /// A bool feature flag's value.
     Bool(bool),

@@ -1,6 +1,90 @@
 # ConfigCat SDK for Rust
 
+[![Build Status](https://github.com/configcat/rust-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/configcat/rust-sdk/actions/workflows/ci.yml)
+
 ConfigCat SDK for Rust provides easy integration for your application to [ConfigCat](https://configcat.com).
+
+## Getting started
+
+### 1. Install the package
+
+Run the following Cargo command in your project directory:
+```shell
+cargo add configcat
+```
+
+Or add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+configcat = "0.1"
+```
+
+### 2. Go to the <a href="https://app.configcat.com/sdkkey" target="_blank">ConfigCat Dashboard</a> to get your *SDK Key*:
+![SDK-KEY](https://raw.githubusercontent.com/ConfigCat/rust-sdk/main/media/readme02-3.png  "SDK-KEY")
+
+### 3. Import the `configcat` module to your application
+```rust
+use configcat::*;
+```
+
+### 4. Create a *ConfigCat* client instance
+```rust
+use configcat::*;
+
+#[tokio::main]
+async fn main() {
+    let client = Client::new("#YOUR-SDK-KEY#").unwrap();
+}
+```
+
+### 5. Get your setting value
+```rust
+use configcat::*;
+
+#[tokio::main]
+async fn main() {
+    let client = Client::new("#YOUR-SDK-KEY#").unwrap();
+
+    let is_awesome_feature_enabled = client.get_value("isAwesomeFeatureEnabled", None, false).await;
+    
+    if is_awesome_feature_enabled {
+        do_the_new_thing();
+    } else {
+        do_the_old_thing();
+    }
+}
+```
+
+## Getting user specific setting values with Targeting
+Using this feature, you will be able to get different setting values for different users in your application by passing a `User Object` to the `get_value()` function.
+
+Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/).
+
+```rust
+use configcat::*;
+
+#[tokio::main]
+async fn main() {
+    let client = Client::new("#YOUR-SDK-KEY#").unwrap();
+
+    let user = User::new("#USER-IDENTIFIER#");
+    let is_awesome_feature_enabled = client.get_value("isAwesomeFeatureEnabled", Some(user), false).await;
+
+    if is_awesome_feature_enabled {
+        do_the_new_thing();
+    } else {
+        do_the_old_thing();
+    }
+}
+```
+
+## Example
+
+The repository contains an [example implementation](./examples/print_eval.rs) that you can run with:
+```shell
+cargo run --example print_eval
+```
 
 ## Polling Modes
 The ConfigCat SDK supports 3 different polling mechanisms to acquire the setting values from ConfigCat. After latest setting values are downloaded, they are stored in the internal cache then all requests are served from there. Read more about Polling Modes and how to use them at [ConfigCat Docs](https://configcat.com/docs/sdk-reference/rust).

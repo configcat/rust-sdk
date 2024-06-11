@@ -4,6 +4,9 @@ use crate::utils::{construct_bool_json_payload, produce_mock_path};
 use configcat::OverrideBehavior::{LocalOnly, LocalOverRemote, RemoteOverLocal};
 use configcat::Value::{Bool, Float, Int};
 use configcat::{Client, ClientCacheState, FileDataSource, MapDataSource, Value};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
 use std::time::Duration;
 
 mod utils;
@@ -94,4 +97,25 @@ async fn remote_over_local() {
     assert!(client.get_value("nonexisting", None, false).await);
 
     m.assert_async().await;
+}
+
+#[tokio::test]
+async fn external_serde() {
+    let content_result = fs::read_to_string("tests/data/test_yaml.yml").unwrap();
+    let overrides = serde_yaml::from_str::<YamlOverrides>(content_result.as_str()).unwrap();
+
+    let map: MapDataSource = overrides.flag_overrides.into();
+    let client = Client::builder("local").overrides(Box::new(map), LocalOnly).build().unwrap();
+
+    assert!(client.get_value("flag_1", None, false).await);
+    assert!(!client.get_value("flag_2", None, true).await);
+    assert_eq!(client.get_value("flag_3", None, String::default()).await, "some string".to_owned());
+    assert_eq!(client.get_value("flag_4", None, 0).await, 1);
+    assert_eq!(client.get_value("flag_5", None, 0).await, -1);
+    assert_eq!(client.get_value("flag_6", None, 0.0).await, 0.5);
+}
+
+#[derive(Serialize, Deserialize)]
+struct YamlOverrides {
+    pub flag_overrides: HashMap<String, Value>,
 }
