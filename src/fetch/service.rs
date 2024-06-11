@@ -160,6 +160,10 @@ impl ConfigService {
         self.state.offline.store(offline, Ordering::SeqCst);
     }
 
+    pub fn is_offline(&self) -> bool {
+        self.state.offline.load(Ordering::SeqCst)
+    }
+
     pub async fn wait_for_init(&self) -> ClientCacheState {
         if !self.state.initialized.load(Ordering::SeqCst) {
             _ = self.state.init_wait.acquire().await
@@ -645,11 +649,13 @@ mod service_tests {
                 .build_options(),
         );
         let service = ConfigService::new(opts).unwrap();
+        assert!(!service.is_offline());
 
         _ = service.refresh().await;
         m.assert_async().await;
 
         service.set_mode(true);
+        assert!(service.is_offline());
 
         m.remove_async().await;
         m = create_success_mock(&mut server, 0).await;
@@ -658,6 +664,7 @@ mod service_tests {
         m.assert_async().await;
 
         service.set_mode(false);
+        assert!(!service.is_offline());
 
         m.remove_async().await;
         m = create_success_mock(&mut server, 1).await;

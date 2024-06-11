@@ -401,6 +401,27 @@ impl Client {
         self.service.set_mode(false);
     }
 
+    /// Returns `true` when the SDK is configured not to initiate HTTP requests, otherwise `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::Client;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = Client::builder("sdk-key")
+    ///         .offline(true)
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     let offline = client.is_offline();
+    /// }
+    /// ```
+    pub fn is_offline(&self) -> bool {
+        self.service.is_offline()
+    }
+
     /// Asynchronously waits for the initialization of the [`Client`] for a maximum duration specified in `wait_timeout`.
     ///
     /// This method fails if the initialization takes more time than the specified `wait_timeout`.
