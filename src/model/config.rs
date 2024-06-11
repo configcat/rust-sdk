@@ -172,7 +172,7 @@ pub fn process_overrides(entry: &mut ConfigEntry, overrides: &Option<FlagOverrid
 /// Describes a ConfigCat config JSON.
 #[derive(Deserialize, Debug, Default)]
 pub struct Config {
-    /// The dictionary of settings.
+    /// The map of settings.
     #[serde(rename = "f")]
     pub settings: HashMap<String, Setting>,
     /// The list of segments.

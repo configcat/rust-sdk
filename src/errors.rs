@@ -8,8 +8,6 @@ pub enum ErrorKind {
     NoError,
     /// Initialization of the internal [`reqwest::Client`] failed.
     HttpClientInitFailure,
-    /// Initialization of the [`crate::Client`] timed out.
-    ClientInitTimedOut,
     /// The evaluation failed because the config JSON was not available locally.
     ConfigJsonNotAvailable = 1000,
     /// The evaluation failed because the key of the evaluated setting was not found in the config JSON.
@@ -36,6 +34,8 @@ pub enum ErrorKind {
     OfflineClient = 3200,
     /// The refresh operation failed because the client is configured to use the [`crate::OverrideBehavior::LocalOnly`] override behavior,
     LocalOnlyClient = 3202,
+    /// Initialization of the [`crate::Client`] timed out.
+    ClientInitTimedOut = 4200,
 }
 
 impl ErrorKind {
