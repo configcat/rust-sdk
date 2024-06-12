@@ -9,7 +9,7 @@ use crate::{ClientCacheState, ClientError, Setting, User};
 use log::{error, warn};
 use std::any::type_name;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -35,6 +35,7 @@ use tokio::time::timeout;
 pub struct Client {
     options: Arc<Options>,
     service: ConfigService,
+    default_user: Arc<Mutex<Option<User>>>,
 }
 
 impl Client {
@@ -44,6 +45,7 @@ impl Client {
             Ok(service) => Ok(Self {
                 options: Arc::clone(&opts),
                 service,
+                default_user: Arc::new(Mutex::new(opts.default_user().clone())),
             }),
             Err(err) => Err(err),
         }
@@ -180,7 +182,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user.clone_from(self.options.default_user());
+            eval_user = self.read_def_user();
         }
         match self.eval_flag(
             &result.config().settings,
@@ -234,7 +236,7 @@ impl Client {
         let result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user.clone_from(self.options.default_user());
+            eval_user = self.read_def_user();
         }
         match self.eval_flag(&result.config().settings, key, &eval_user, None) {
             Ok(eval_result) => EvaluationDetails {
@@ -273,7 +275,7 @@ impl Client {
     /// }
     /// ```
     pub async fn get_all_values(&self, user: Option<User>) -> HashMap<String, Value> {
-        let details = self.get_all_details(user).await;
+        let details = self.get_all_value_details(user).await;
         let mut result = HashMap::<String, Value>::with_capacity(details.len());
         for detail in details {
             if let Some(val) = detail.value {
@@ -297,17 +299,17 @@ impl Client {
     ///     let client = Client::new("sdk-key").unwrap();
     ///
     ///     let user = User::new("user-id");
-    ///     let all_details = client.get_all_details(Some(user)).await;
+    ///     let all_details = client.get_all_value_details(Some(user)).await;
     /// }
     /// ```
-    pub async fn get_all_details(
+    pub async fn get_all_value_details(
         &self,
         user: Option<User>,
     ) -> Vec<EvaluationDetails<Option<Value>>> {
         let config_result = self.service.config().await;
         let mut eval_user = user;
         if eval_user.is_none() {
-            eval_user.clone_from(self.options.default_user());
+            eval_user = self.read_def_user();
         }
         let settings = &config_result.config().settings;
         let mut result = Vec::<EvaluationDetails<Option<Value>>>::with_capacity(settings.len());
@@ -422,6 +424,45 @@ impl Client {
         self.service.is_offline()
     }
 
+    /// Sets the default user.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, User};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = Client::new("sdk-key").unwrap();
+    ///
+    ///     client.set_default_user(User::new("user-id"));
+    /// }
+    /// ```
+    pub fn set_default_user(&mut self, user: User) {
+        self.set_def_user(Some(user))
+    }
+
+    /// Clears the default user.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use configcat::{Client, User};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = Client::builder("sdk-key")
+    ///         .default_user(User::new("user-id"))
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.clear_default_user();
+    /// }
+    /// ```
+    pub fn clear_default_user(&mut self) {
+        self.set_def_user(None)
+    }
+
     /// Asynchronously waits for the initialization of the [`Client`] for a maximum duration specified in `wait_timeout`.
     ///
     /// This method fails if the initialization takes more time than the specified `wait_timeout`.
@@ -492,5 +533,15 @@ impl Client {
                 }
             }
         }
+    }
+
+    fn read_def_user(&self) -> Option<User> {
+        let user = self.default_user.lock().unwrap();
+        user.clone()
+    }
+
+    fn set_def_user(&self, user: Option<User>) {
+        let mut def_user = self.default_user.lock().unwrap();
+        *def_user = user
     }
 }
