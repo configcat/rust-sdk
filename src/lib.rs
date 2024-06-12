@@ -1,4 +1,6 @@
 //! ConfigCat SDK for Rust.
+//!
+//! For more information and code samples, see the [Rust SDK documentation](https://configcat.com/docs/sdk-reference/rust).
 
 #![warn(missing_docs)]
 
