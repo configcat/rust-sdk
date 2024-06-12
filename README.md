@@ -48,7 +48,7 @@ use configcat::*;
 async fn main() {
     let client = Client::new("#YOUR-SDK-KEY#").unwrap();
 
-    let is_awesome_feature_enabled = client.get_value("isAwesomeFeatureEnabled", None, false).await;
+    let is_awesome_feature_enabled = client.get_value("isAwesomeFeatureEnabled", false, None).await;
     
     if is_awesome_feature_enabled {
         do_the_new_thing();
@@ -71,7 +71,7 @@ async fn main() {
     let client = Client::new("#YOUR-SDK-KEY#").unwrap();
 
     let user = User::new("#USER-IDENTIFIER#");
-    let is_awesome_feature_enabled = client.get_value("isAwesomeFeatureEnabled", Some(user), false).await;
+    let is_awesome_feature_enabled = client.get_value("isAwesomeFeatureEnabled", false, Some(user)).await;
 
     if is_awesome_feature_enabled {
         do_the_new_thing();

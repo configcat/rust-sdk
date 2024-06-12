@@ -16,7 +16,7 @@ async fn main() {
         .unwrap();
 
     let is_awesome_enabled = client
-        .get_value("isAwesomeFeatureEnabled", None, false)
+        .get_value("isAwesomeFeatureEnabled", false, None)
         .await;
 
     println!("isAwesomeFeatureEnabled: {is_awesome_enabled}");
@@ -24,7 +24,7 @@ async fn main() {
     let user = User::new("#SOME-USER-ID#").email("configcat@example.com");
 
     let is_poc_enabled = client
-        .get_value("isPOCFeatureEnabled", Some(user), false)
+        .get_value("isPOCFeatureEnabled", false, Some(user))
         .await;
 
     println!("isPOCFeatureEnabled: {is_poc_enabled}");

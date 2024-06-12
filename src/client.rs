@@ -29,7 +29,7 @@ use tokio::time::timeout;
 ///         .unwrap();
 ///
 ///     let user = User::new("user-id");
-///     let is_flag_enabled = client.get_value("flag-key", Some(user), false).await;
+///     let is_flag_enabled = client.get_value("flag-key", false, Some(user)).await;
 /// }
 /// ```
 pub struct Client {
@@ -145,16 +145,16 @@ impl Client {
     ///     let client = Client::new("sdk-key").unwrap();
     ///
     ///     let user = User::new("user-id");
-    ///     let value = client.get_value("flag-key", Some(user), false).await;
+    ///     let value = client.get_value("flag-key", false, Some(user)).await;
     /// }
     /// ```
     pub async fn get_value<T: ValuePrimitive + Clone + Default>(
         &self,
         key: &str,
-        user: Option<User>,
         default: T,
+        user: Option<User>,
     ) -> T {
-        self.get_value_details(key, user, default).await.value
+        self.get_value_details(key, default, user).await.value
     }
 
     /// The same as [`Client::get_value`] but returns an [`EvaluationDetails`] that
@@ -170,14 +170,14 @@ impl Client {
     ///     let client = Client::new("sdk-key").unwrap();
     ///
     ///     let user = User::new("user-id");
-    ///     let details = client.get_value_details("flag-key", Some(user), String::default()).await;
+    ///     let details = client.get_value_details("flag-key", String::default(), Some(user)).await;
     /// }
     /// ```
     pub async fn get_value_details<T: ValuePrimitive + Clone + Default>(
         &self,
         key: &str,
-        user: Option<User>,
         default: T,
+        user: Option<User>,
     ) -> EvaluationDetails<T> {
         let result = self.service.config().await;
         let mut eval_user = user;

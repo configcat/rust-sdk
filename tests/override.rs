@@ -15,22 +15,22 @@ mod utils;
 async fn file_simple() {
     let client = Client::builder("local").overrides(Box::new(FileDataSource::new("tests/data/test_json_simple.json").unwrap()), LocalOnly).build().unwrap();
 
-    assert!(client.get_value("enabledFeature", None, false).await);
-    assert!(!client.get_value("disabledFeature", None, true).await);
-    assert_eq!(client.get_value("intSetting", None, 0).await, 5);
-    assert_eq!(client.get_value("doubleSetting", None, 0.0).await, 1.2);
-    assert_eq!(client.get_value("stringSetting", None, String::default()).await, "test".to_owned());
+    assert!(client.get_value("enabledFeature", false, None).await);
+    assert!(!client.get_value("disabledFeature", true, None).await);
+    assert_eq!(client.get_value("intSetting", 0, None).await, 5);
+    assert_eq!(client.get_value("doubleSetting", 0.0, None).await, 1.2);
+    assert_eq!(client.get_value("stringSetting", String::default(), None).await, "test".to_owned());
 }
 
 #[tokio::test]
 async fn file_complex() {
     let client = Client::builder("local").overrides(Box::new(FileDataSource::new("tests/data/test_json_complex.json").unwrap()), LocalOnly).build().unwrap();
 
-    assert!(client.get_value("enabledFeature", None, false).await);
-    assert!(!client.get_value("disabledFeature", None, true).await);
-    assert_eq!(client.get_value("intSetting", None, 0).await, 5);
-    assert_eq!(client.get_value("doubleSetting", None, 0.0).await, 1.2);
-    assert_eq!(client.get_value("stringSetting", None, String::default()).await, "test".to_owned());
+    assert!(client.get_value("enabledFeature", false, None).await);
+    assert!(!client.get_value("disabledFeature", true, None).await);
+    assert_eq!(client.get_value("intSetting", 0, None).await, 5);
+    assert_eq!(client.get_value("doubleSetting", 0.0, None).await, 1.2);
+    assert_eq!(client.get_value("stringSetting", String::default(), None).await, "test".to_owned());
 }
 
 #[tokio::test]
@@ -54,11 +54,11 @@ async fn map() {
         .unwrap();
 
     assert!(matches!(client.wait_for_ready(Duration::from_secs(5)).await.unwrap(), ClientCacheState::HasLocalOverrideFlagDataOnly));
-    assert!(client.get_value("enabledFeature", None, false).await);
-    assert!(!client.get_value("disabledFeature", None, true).await);
-    assert_eq!(client.get_value("intSetting", None, 0).await, 5);
-    assert_eq!(client.get_value("doubleSetting", None, 0.0).await, 1.2);
-    assert_eq!(client.get_value("stringSetting", None, String::default()).await, "test".to_owned());
+    assert!(client.get_value("enabledFeature", false, None).await);
+    assert!(!client.get_value("disabledFeature", true, None).await);
+    assert_eq!(client.get_value("intSetting", 0, None).await, 5);
+    assert_eq!(client.get_value("doubleSetting", 0.0, None).await, 1.2);
+    assert_eq!(client.get_value("stringSetting", String::default(), None).await, "test".to_owned());
 
     m.assert_async().await;
 }
@@ -75,8 +75,8 @@ async fn local_over_remote() {
         .build()
         .unwrap();
 
-    assert!(client.get_value("fakeKey", None, false).await);
-    assert!(client.get_value("nonexisting", None, false).await);
+    assert!(client.get_value("fakeKey", false, None).await);
+    assert!(client.get_value("nonexisting", false, None).await);
 
     m.assert_async().await;
 }
@@ -93,8 +93,8 @@ async fn remote_over_local() {
         .build()
         .unwrap();
 
-    assert!(!client.get_value("fakeKey", None, false).await);
-    assert!(client.get_value("nonexisting", None, false).await);
+    assert!(!client.get_value("fakeKey", false, None).await);
+    assert!(client.get_value("nonexisting", false, None).await);
 
     m.assert_async().await;
 }
@@ -107,12 +107,12 @@ async fn external_serde() {
     let map: MapDataSource = overrides.flag_overrides.into();
     let client = Client::builder("local").overrides(Box::new(map), LocalOnly).build().unwrap();
 
-    assert!(client.get_value("flag_1", None, false).await);
-    assert!(!client.get_value("flag_2", None, true).await);
-    assert_eq!(client.get_value("flag_3", None, String::default()).await, "some string".to_owned());
-    assert_eq!(client.get_value("flag_4", None, 0).await, 1);
-    assert_eq!(client.get_value("flag_5", None, 0).await, -1);
-    assert_eq!(client.get_value("flag_6", None, 0.0).await, 0.5);
+    assert!(client.get_value("flag_1", false, None).await);
+    assert!(!client.get_value("flag_2", true, None).await);
+    assert_eq!(client.get_value("flag_3", String::default(), None).await, "some string".to_owned());
+    assert_eq!(client.get_value("flag_4", 0, None).await, 1);
+    assert_eq!(client.get_value("flag_5", 0, None).await, -1);
+    assert_eq!(client.get_value("flag_6", 0.0, None).await, 0.5);
 }
 
 #[derive(Serialize, Deserialize)]

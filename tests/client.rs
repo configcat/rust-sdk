@@ -21,11 +21,11 @@ async fn default_user_flag() {
 #[tokio::test]
 async fn default_user_value() {
     let client = client_builder().default_user(User::new("id1")).build().unwrap();
-    let details_without_user = client.get_value_details("disabledFeature", None, false).await;
+    let details_without_user = client.get_value_details("disabledFeature", false, None).await;
 
     assert_eq!("id1", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 
-    let details = client.get_value_details("disabledFeature", Some(User::new("id2")), false).await;
+    let details = client.get_value_details("disabledFeature", false, Some(User::new("id2"))).await;
 
     assert_eq!("id2", details.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 }
@@ -33,22 +33,22 @@ async fn default_user_value() {
 #[tokio::test]
 async fn default_user_set_clear() {
     let mut client = client_builder().default_user(User::new("id1")).build().unwrap();
-    let details_without_user = client.get_value_details("disabledFeature", None, false).await;
+    let details_without_user = client.get_value_details("disabledFeature", false, None).await;
 
     assert_eq!("id1", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 
     client.set_default_user(User::new("id2"));
-    let details_without_user = client.get_value_details("disabledFeature", None, false).await;
+    let details_without_user = client.get_value_details("disabledFeature", false, None).await;
 
     assert_eq!("id2", details_without_user.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 
     client.clear_default_user();
 
-    let details_without_user = client.get_value_details("disabledFeature", None, false).await;
+    let details_without_user = client.get_value_details("disabledFeature", false, None).await;
 
     assert!(details_without_user.user.is_none());
 
-    let details = client.get_value_details("disabledFeature", Some(User::new("id3")), false).await;
+    let details = client.get_value_details("disabledFeature", false, Some(User::new("id3"))).await;
 
     assert_eq!("id3", details.user.unwrap()[User::IDENTIFIER].to_string().as_str());
 }
@@ -56,7 +56,7 @@ async fn default_user_set_clear() {
 #[tokio::test]
 async fn default_value_type_mismatch() {
     let client = client_builder().build().unwrap();
-    let value = client.get_value("disabledFeature", None, "def".to_owned()).await;
+    let value = client.get_value("disabledFeature", "def".to_owned(), None).await;
 
     assert_eq!(value, "def");
 }
