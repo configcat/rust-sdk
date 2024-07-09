@@ -280,7 +280,7 @@ async fn fetch_if_older(
             ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
         }
         FetchResponse::NotModified => {
-            entry.fetch_time = Utc::now();
+            entry.set_fetch_time(Utc::now());
             options
                 .cache()
                 .write(&state.cache_key, entry.cache_str.as_str());
@@ -288,7 +288,7 @@ async fn fetch_if_older(
         }
         FetchResponse::Failed(err, transient) => {
             if !transient && !entry.is_empty() {
-                entry.fetch_time = Utc::now();
+                entry.set_fetch_time(Utc::now());
                 options
                     .cache()
                     .write(&state.cache_key, entry.cache_str.as_str());
