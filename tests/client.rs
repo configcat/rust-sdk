@@ -100,6 +100,15 @@ async fn get_all_values_with_user() {
     assert!(values["disabledFeature"].as_bool().unwrap());
 }
 
+#[tokio::test]
+async fn dbg() {
+    let client = client_builder().build().unwrap();
+
+    let exp =
+        r#"Client { options: Options { sdk_key: "local", offline: false, base_url: None, data_governance: Global, http_timeout: 30s, overrides: Some(FlagOverrides { behavior: LocalOnly }), polling_mode: AutoPoll(60s), default_user: None }, default_user: Mutex { data: None, poisoned: false, .. } }"#;
+    assert_eq!(format!("{client:?}"), exp);
+}
+
 fn client_builder() -> ClientBuilder {
     Client::builder("local").overrides(Box::new(FileDataSource::new("tests/data/test_json_complex.json").unwrap()), LocalOnly)
 }

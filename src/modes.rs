@@ -12,6 +12,7 @@ use std::time::Duration;
 /// let lazy_load = PollingMode::LazyLoad(Duration::from_secs(60));
 /// let manual = PollingMode::Manual;
 /// ```
+#[derive(Debug)]
 pub enum PollingMode {
     /// Specifies how frequently the locally cached config will be refreshed by fetching the latest version from the remote server.
     ///

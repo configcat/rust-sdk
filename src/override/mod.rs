@@ -1,5 +1,6 @@
 use crate::{OverrideBehavior, OverrideDataSource};
 use std::borrow::Borrow;
+use std::fmt::{Debug, Formatter};
 
 pub mod behavior;
 pub mod file;
@@ -35,5 +36,13 @@ impl OptionalOverrides for Option<FlagOverrides> {
             return matches!(ov.behavior, OverrideBehavior::LocalOnly);
         }
         false
+    }
+}
+
+impl Debug for FlagOverrides {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlagOverrides")
+            .field("behavior", &self.behavior)
+            .finish()
     }
 }

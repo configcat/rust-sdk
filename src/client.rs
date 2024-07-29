@@ -9,6 +9,7 @@ use crate::{ClientCacheState, ClientError, Setting, User};
 use log::{error, warn};
 use std::any::type_name;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -543,5 +544,14 @@ impl Client {
     fn set_def_user(&self, user: Option<User>) {
         let mut def_user = self.default_user.lock().unwrap();
         *def_user = user
+    }
+}
+
+impl Debug for Client {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client")
+            .field("options", &self.options)
+            .field("default_user", &self.default_user)
+            .finish()
     }
 }
