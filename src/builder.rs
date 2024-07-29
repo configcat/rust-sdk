@@ -6,6 +6,7 @@ use crate::modes::PollingMode;
 use crate::r#override::{FlagOverrides, OptionalOverrides};
 use crate::{Client, ConfigCache, OverrideBehavior, OverrideDataSource, User};
 use std::borrow::Borrow;
+use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 
 pub struct Options {
@@ -55,6 +56,21 @@ impl Options {
 
     pub(crate) fn default_user(&self) -> &Option<User> {
         &self.default_user
+    }
+}
+
+impl Debug for Options {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Options")
+            .field("sdk_key", &self.sdk_key)
+            .field("offline", &self.offline)
+            .field("base_url", &self.base_url)
+            .field("data_governance", &self.data_governance)
+            .field("http_timeout", &self.http_timeout)
+            .field("overrides", &self.overrides)
+            .field("polling_mode", &self.polling_mode)
+            .field("default_user", &self.default_user)
+            .finish()
     }
 }
 

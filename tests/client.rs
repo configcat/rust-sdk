@@ -100,6 +100,13 @@ async fn get_all_values_with_user() {
     assert!(values["disabledFeature"].as_bool().unwrap());
 }
 
+#[tokio::test]
+async fn dbg() {
+    let client = client_builder().build().unwrap();
+
+    assert!(format!("{client:?}").starts_with("Client { options: Options { sdk_key: "));
+}
+
 fn client_builder() -> ClientBuilder {
     Client::builder("local").overrides(Box::new(FileDataSource::new("tests/data/test_json_complex.json").unwrap()), LocalOnly)
 }

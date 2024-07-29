@@ -70,7 +70,7 @@ pub enum UserValue {
 ///
 /// assert_eq!("user-id", user[User::IDENTIFIER].to_string().as_str());
 /// ```
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct User {
     attributes: HashMap<String, UserValue>,
 }
