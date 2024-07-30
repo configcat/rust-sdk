@@ -34,7 +34,7 @@ impl EvalLogBuilder {
         self.content
             .push_str(Self::INDENT_SEQ.repeat(self.indent).as_str());
         if let Some(msg) = message {
-            self.content.push_str(msg)
+            self.content.push_str(msg);
         }
         self
     }

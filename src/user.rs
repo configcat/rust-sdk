@@ -175,6 +175,7 @@ impl User {
 }
 
 impl UserValue {
+    #![allow(clippy::cast_precision_loss)]
     pub(crate) fn as_str(&self) -> (String, bool) {
         match self {
             UserValue::String(val) => (val.clone(), false),
@@ -188,7 +189,7 @@ impl UserValue {
                 } else if (1e-6..1e21).contains(&val.abs()) {
                     (val.to_string(), true)
                 } else {
-                    let sc = format!("{:+e}", val);
+                    let sc = format!("{val:+e}");
                     if val.abs() > 1.0 {
                         (sc.replace('e', "e+"), true)
                     } else {
@@ -212,6 +213,7 @@ impl UserValue {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
     pub(crate) fn as_float(&self) -> Option<f64> {
         match self {
             UserValue::String(val) => {
@@ -233,6 +235,7 @@ impl UserValue {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
     pub(crate) fn as_timestamp(&self) -> Option<f64> {
         match self {
             UserValue::DateTime(val) => Some((val.timestamp_millis() as f64) / 1000.0),
@@ -328,7 +331,7 @@ impl Serialize for UserValue {
 
 impl From<Vec<&str>> for UserValue {
     fn from(value: Vec<&str>) -> Self {
-        let str_vec = value.iter().map(|v| v.to_string()).collect();
+        let str_vec = value.iter().map(|v| (*v).to_string()).collect();
         Self::StringVec(str_vec)
     }
 }

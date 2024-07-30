@@ -39,8 +39,9 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub(crate) fn as_u8(&self) -> u8 {
-        *self as u8
+    #![allow(clippy::cast_possible_truncation)]
+    pub(crate) fn as_u8(self) -> u8 {
+        self as u8
     }
 }
 
@@ -55,7 +56,7 @@ pub struct ClientError {
 
 impl ClientError {
     pub(crate) fn new(kind: ErrorKind, message: String) -> Self {
-        Self { message, kind }
+        Self { kind, message }
     }
 }
 

@@ -1,11 +1,22 @@
-use crate::eval::evaluator::ConditionResult::*;
+use crate::eval::evaluator::ConditionResult::{
+    AttrInvalid, AttrMissing, CompValInvalid, Fatal, NoUser, Success,
+};
 use crate::eval::log_builder::EvalLogBuilder;
 use crate::value::{OptionalValueDisplay, Value};
-use crate::UserComparator::*;
+use crate::UserComparator::{
+    AfterDateTime, ArrayContainsAnyOf, ArrayContainsAnyOfHashed, ArrayNotContainsAnyOf,
+    ArrayNotContainsAnyOfHashed, BeforeDateTime, Contains, EndsWithAnyOf, EndsWithAnyOfHashed, Eq,
+    EqHashed, EqNum, GreaterEqNum, GreaterEqSemver, GreaterNum, GreaterSemver, LessEqNum,
+    LessEqSemver, LessNum, LessSemver, NotContains, NotEndsWithAnyOf, NotEndsWithAnyOfHashed,
+    NotEq, NotEqHashed, NotEqNum, NotOneOf, NotOneOfHashed, NotOneOfSemver, NotStartsWithAnyOf,
+    NotStartsWithAnyOfHashed, OneOf, OneOfHashed, OneOfSemver, StartsWithAnyOf,
+    StartsWithAnyOfHashed,
+};
 use crate::{
     utils, Condition, PercentageOption, PrerequisiteFlagComparator, PrerequisiteFlagCondition,
-    SegmentComparator::*, SegmentCondition, ServedValue, Setting, SettingType, SettingValue,
-    TargetingRule, User, UserComparator, UserCondition,
+    SegmentComparator::{IsIn, IsNotIn},
+    SegmentCondition, ServedValue, Setting, SettingType, SettingValue, TargetingRule, User,
+    UserComparator, UserCondition,
 };
 use log::{info, log_enabled, warn};
 use semver::Version;
@@ -128,6 +139,7 @@ pub fn eval(
     result
 }
 
+#[allow(clippy::too_many_lines)]
 fn eval_setting(
     setting: &Setting,
     key: &str,
@@ -197,7 +209,7 @@ fn eval_setting(
                                             );
                                         }
                                         PercentageResult::UserAttrMissing(attr) => {
-                                            log_attr_missing_percentage(key, attr.as_str())
+                                            log_attr_missing_percentage(key, attr.as_str());
                                         }
                                         PercentageResult::Fatal(err) => return Err(err),
                                     }
@@ -266,7 +278,7 @@ fn eval_setting(
                         );
                     }
                     PercentageResult::UserAttrMissing(attr) => {
-                        log_attr_missing_percentage(key, attr.as_str())
+                        log_attr_missing_percentage(key, attr.as_str());
                     }
                     PercentageResult::Fatal(err) => return Err(err),
                 }
@@ -323,9 +335,7 @@ fn eval_percentage(
     } else {
         IDENTIFIER_ATTR
     };
-    let user_attr = if let Some(user_attr) = user.get(attr) {
-        user_attr
-    } else {
+    let Some(user_attr) = user.get(attr) else {
         if eval_log_enabled!() {
             log.new_ln(Some(
                 format!("Skipping % options because the User.{attr} attribute is missing.")
@@ -470,14 +480,10 @@ fn eval_prerequisite_cond(
     if eval_log_enabled!() {
         log.append(format!("{cond}").as_str());
     }
-    let prerequisite = if let Some(prerequisite) = settings.get(&cond.flag_key) {
-        prerequisite
-    } else {
+    let Some(prerequisite) = settings.get(&cond.flag_key) else {
         return Fatal("Prerequisite flag is missing".to_owned());
     };
-    let checked = if let Some(checked) = cond.flag_value.as_val(&prerequisite.setting_type) {
-        checked
-    } else {
+    let Some(checked) = cond.flag_value.as_val(&prerequisite.setting_type) else {
         return Fatal(format!(
             "Type mismatch between comparison value '{}' and prerequisite flag '{}'",
             cond.flag_value, cond.flag_key
@@ -539,9 +545,7 @@ fn eval_segment_cond(
     salt: &Option<String>,
     log: &mut EvalLogBuilder,
 ) -> ConditionResult {
-    let segment = if let Some(segment) = cond.segment.as_ref() {
-        segment
-    } else {
+    let Some(segment) = cond.segment.as_ref() else {
         return Fatal("Segment reference is invalid".to_owned());
     };
 
@@ -585,9 +589,9 @@ fn eval_segment_cond(
         log.new_ln(Some("Segment evaluation result: "));
         if result.is_success() {
             let msg = if result.is_match() {
-                format!("{}", IsIn)
+                format!("{IsIn}")
             } else {
-                format!("{}", IsNotIn)
+                format!("{IsNotIn}")
             };
             log.append(format!("User {msg}.").as_str());
         } else {
@@ -596,11 +600,11 @@ fn eval_segment_cond(
         log.new_ln(Some("Condition ("))
             .append(format!("{cond}").as_str())
             .append(")");
-        if !result.is_success() {
-            log.append(" failed to evaluate.");
-        } else {
+        if result.is_success() {
             let msg = format!("{}", result.is_match() == needs_true);
             log.append(format!(" evaluates to {msg}.").as_str());
+        } else {
+            log.append(" failed to evaluate.");
         }
         log.dec_indent().new_ln(Some(")"));
     }
@@ -610,6 +614,7 @@ fn eval_segment_cond(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn eval_user_cond(
     cond: &UserCondition,
     key: &str,
@@ -617,16 +622,12 @@ fn eval_user_cond(
     salt: &Option<String>,
     ctx_salt: &str,
 ) -> ConditionResult {
-    let user_attr = if let Some(user_attr) = user.get(&cond.comp_attr) {
-        user_attr
-    } else {
+    let Some(user_attr) = user.get(&cond.comp_attr) else {
         return AttrMissing(cond.comp_attr.clone(), format!("{cond}"));
     };
     return match cond.comparator {
         Eq | NotEq | EqHashed | NotEqHashed => {
-            let comp_val = if let Some(comp_val) = cond.string_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_val.as_ref() else {
                 return CompValInvalid(None);
             };
             let (user_val, converted) = user_attr.as_str();
@@ -636,9 +637,7 @@ fn eval_user_cond(
             eval_text_eq(comp_val, user_val, &cond.comparator, salt, ctx_salt)
         }
         OneOf | NotOneOf | OneOfHashed | NotOneOfHashed => {
-            let comp_val = if let Some(comp_val) = cond.string_vec_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_vec_val.as_ref() else {
                 return CompValInvalid(None);
             };
             let (user_val, converted) = user_attr.as_str();
@@ -655,108 +654,90 @@ fn eval_user_cond(
         | NotEndsWithAnyOf
         | EndsWithAnyOfHashed
         | NotEndsWithAnyOfHashed => {
-            let comp_val = if let Some(comp_val) = cond.string_vec_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_vec_val.as_ref() else {
                 return CompValInvalid(None);
             };
             let (user_val, converted) = user_attr.as_str();
             if converted {
                 log_conv(cond, key, user_val.as_str());
             }
-            eval_starts_ends_with(comp_val, user_val, &cond.comparator, salt, ctx_salt)
+            eval_starts_ends_with(
+                comp_val,
+                user_val.as_str(),
+                &cond.comparator,
+                salt,
+                ctx_salt,
+            )
         }
         Contains | NotContains => {
-            let comp_val = if let Some(comp_val) = cond.string_vec_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_vec_val.as_ref() else {
                 return CompValInvalid(None);
             };
             let (user_val, converted) = user_attr.as_str();
             if converted {
                 log_conv(cond, key, user_val.as_str());
             }
-            eval_contains(comp_val, user_val, &cond.comparator)
+            eval_contains(comp_val, user_val.as_str(), &cond.comparator)
         }
         OneOfSemver | NotOneOfSemver => {
-            let comp_val = if let Some(comp_val) = cond.string_vec_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_vec_val.as_ref() else {
                 return CompValInvalid(None);
             };
-            let user_val = if let Some(user_val) = user_attr.as_semver() {
-                user_val
-            } else {
+            let Some(user_val) = user_attr.as_semver() else {
                 return AttrInvalid(
                     format!("'{user_attr}' is not a valid semantic version"),
                     cond.comp_attr.clone(),
                     format!("{cond}"),
                 );
             };
-            eval_semver_is_one_of(comp_val, user_val, &cond.comparator)
+            eval_semver_is_one_of(comp_val, &user_val, &cond.comparator)
         }
         GreaterSemver | GreaterEqSemver | LessSemver | LessEqSemver => {
-            let comp_val = if let Some(comp_val) = cond.string_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_val.as_ref() else {
                 return CompValInvalid(None);
             };
-            let user_val = if let Some(user_val) = user_attr.as_semver() {
-                user_val
-            } else {
+            let Some(user_val) = user_attr.as_semver() else {
                 return AttrInvalid(
                     format!("'{user_attr}' is not a valid semantic version"),
                     cond.comp_attr.clone(),
                     format!("{cond}"),
                 );
             };
-            eval_semver_compare(comp_val, user_val, &cond.comparator)
+            eval_semver_compare(comp_val, &user_val, &cond.comparator)
         }
         EqNum | NotEqNum | GreaterNum | GreaterEqNum | LessNum | LessEqNum => {
-            let comp_val = if let Some(comp_val) = cond.float_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.float_val else {
                 return CompValInvalid(None);
             };
-            let user_val = if let Some(user_val) = user_attr.as_float() {
-                user_val
-            } else {
+            let Some(user_val) = user_attr.as_float() else {
                 return AttrInvalid(
                     format!("'{user_attr}' is not a valid decimal number"),
                     cond.comp_attr.clone(),
                     format!("{cond}"),
                 );
             };
-            eval_number_compare(comp_val, &user_val, &cond.comparator)
+            eval_number_compare(comp_val, user_val, &cond.comparator)
         }
         BeforeDateTime | AfterDateTime => {
-            let comp_val = if let Some(comp_val) = cond.float_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.float_val else {
                 return CompValInvalid(None);
             };
-            let user_val = if let Some(user_val) = user_attr.as_timestamp() {
-                user_val
-            } else {
+            let Some(user_val) = user_attr.as_timestamp() else {
                 return AttrInvalid(format!("'{user_attr}' is not a valid Unix timestamp (number of seconds elapsed since Unix epoch)"),
                                    cond.comp_attr.clone(),
                                    format!("{cond}")
                 );
             };
-            eval_date(comp_val, &user_val, &cond.comparator)
+            eval_date(comp_val, user_val, &cond.comparator)
         }
         ArrayContainsAnyOf
         | ArrayNotContainsAnyOf
         | ArrayContainsAnyOfHashed
         | ArrayNotContainsAnyOfHashed => {
-            let comp_val = if let Some(comp_val) = cond.string_vec_val.as_ref() {
-                comp_val
-            } else {
+            let Some(comp_val) = cond.string_vec_val.as_ref() else {
                 return CompValInvalid(None);
             };
-            let user_val = if let Some(user_val) = user_attr.as_str_vec() {
-                user_val
-            } else {
+            let Some(user_val) = user_attr.as_str_vec() else {
                 return AttrInvalid(
                     format!("{user_attr} is not a valid string vector"),
                     cond.comp_attr.clone(),
@@ -782,9 +763,7 @@ fn eval_text_eq(
     };
     let mut usr_v = user_val;
     if comp.is_sensitive() {
-        let st = if let Some(st) = salt {
-            st
-        } else {
+        let Some(st) = salt else {
             return Fatal(SALT_MISSING_MSG.to_owned());
         };
         usr_v = utils::sha256(usr_v.as_str(), st.as_str(), ctx_salt);
@@ -806,14 +785,12 @@ fn eval_one_of(
     };
     let mut usr_v = user_val;
     if comp.is_sensitive() {
-        let st = if let Some(st) = salt {
-            st
-        } else {
+        let Some(st) = salt else {
             return Fatal(SALT_MISSING_MSG.to_owned());
         };
         usr_v = utils::sha256(usr_v.as_str(), st.as_str(), ctx_salt);
     }
-    for item in comp_val.iter() {
+    for item in comp_val {
         if *item == usr_v {
             return Success(needs_true);
         }
@@ -823,7 +800,7 @@ fn eval_one_of(
 
 fn eval_starts_ends_with(
     comp_val: &[String],
-    user_val: String,
+    user_val: &str,
     comp: &UserComparator,
     salt: &Option<String>,
     ctx_salt: &str,
@@ -841,19 +818,15 @@ fn eval_starts_ends_with(
     };
     if comp.is_sensitive() {
         let user_val_len = user_val.len();
-        for item in comp_val.iter() {
-            let st = if let Some(st) = salt {
-                st
-            } else {
+        for item in comp_val {
+            let Some(st) = salt else {
                 return Fatal(SALT_MISSING_MSG.to_owned());
             };
             let parts: Vec<&str> = item.split('_').collect();
             if parts.len() < 2 || parts[1].is_empty() {
                 return Fatal(COMP_VAL_INVALID_MSG.to_owned());
             }
-            let length = if let Ok(lg) = parts[0].trim().parse::<usize>() {
-                lg
-            } else {
+            let Ok(length) = parts[0].trim().parse::<usize>() else {
                 return Fatal(COMP_VAL_INVALID_MSG.to_owned());
             };
             if length > user_val_len {
@@ -877,7 +850,7 @@ fn eval_starts_ends_with(
             }
         }
     } else {
-        for item in comp_val.iter() {
+        for item in comp_val {
             let condition = if comp.is_starts_with() {
                 user_val.starts_with(item.as_str())
             } else {
@@ -891,9 +864,9 @@ fn eval_starts_ends_with(
     Success(!needs_true)
 }
 
-fn eval_contains(comp_val: &[String], user_val: String, comp: &UserComparator) -> ConditionResult {
+fn eval_contains(comp_val: &[String], user_val: &str, comp: &UserComparator) -> ConditionResult {
     let needs_true = *comp == Contains;
-    for item in comp_val.iter() {
+    for item in comp_val {
         if user_val.contains(item) {
             return Success(needs_true);
         }
@@ -903,19 +876,17 @@ fn eval_contains(comp_val: &[String], user_val: String, comp: &UserComparator) -
 
 fn eval_semver_is_one_of(
     comp_val: &[String],
-    user_val: Version,
+    user_val: &Version,
     comp: &UserComparator,
 ) -> ConditionResult {
     let needs_true = *comp == OneOfSemver;
     let mut matched = false;
-    for item in comp_val.iter() {
+    for item in comp_val {
         let trimmed = item.trim();
         if trimmed.is_empty() {
             continue;
         }
-        let comp_ver = if let Ok(ver) = utils::parse_semver(trimmed) {
-            ver
-        } else {
+        let Ok(comp_ver) = utils::parse_semver(trimmed) else {
             // NOTE: Previous versions of the evaluation algorithm ignored invalid comparison values.
             // We keep this behavior for backward compatibility.
             return Success(false);
@@ -929,12 +900,10 @@ fn eval_semver_is_one_of(
 
 fn eval_semver_compare(
     comp_val: &str,
-    user_val: Version,
+    user_val: &Version,
     comp: &UserComparator,
 ) -> ConditionResult {
-    let comp_ver = if let Ok(ver) = utils::parse_semver(comp_val) {
-        ver
-    } else {
+    let Ok(comp_ver) = utils::parse_semver(comp_val) else {
         // NOTE: Previous versions of the evaluation algorithm ignored invalid comparison values.
         // We keep this behavior for backward compatibility.
         return Success(false);
@@ -948,7 +917,8 @@ fn eval_semver_compare(
     }
 }
 
-fn eval_number_compare(comp_val: &f64, user_val: &f64, comp: &UserComparator) -> ConditionResult {
+#[allow(clippy::float_cmp)]
+fn eval_number_compare(comp_val: f64, user_val: f64, comp: &UserComparator) -> ConditionResult {
     match comp {
         EqNum => Success(user_val == comp_val),
         NotEqNum => Success(user_val != comp_val),
@@ -960,7 +930,7 @@ fn eval_number_compare(comp_val: &f64, user_val: &f64, comp: &UserComparator) ->
     }
 }
 
-fn eval_date(comp_val: &f64, user_val: &f64, comp: &UserComparator) -> ConditionResult {
+fn eval_date(comp_val: f64, user_val: f64, comp: &UserComparator) -> ConditionResult {
     match comp {
         BeforeDateTime => Success(user_val < comp_val),
         _ => Success(user_val > comp_val),
@@ -979,21 +949,19 @@ fn eval_array_contains(
     } else {
         *comp == ArrayContainsAnyOf
     };
-    for user_item in user_val.iter() {
+    for user_item in user_val {
         if comp.is_sensitive() {
-            let st = if let Some(st) = salt {
-                st
-            } else {
+            let Some(st) = salt else {
                 return Fatal(SALT_MISSING_MSG.to_owned());
             };
             let user_hashed = utils::sha256(user_item.as_str(), st.as_str(), ctx_salt);
-            for comp_item in comp_val.iter() {
+            for comp_item in comp_val {
                 if user_hashed == *comp_item {
                     return Success(needs_true);
                 }
             }
         }
-        for comp_item in comp_val.iter() {
+        for comp_item in comp_val {
             if user_item == comp_item {
                 return Success(needs_true);
             }
@@ -1003,21 +971,21 @@ fn eval_array_contains(
 }
 
 fn log_user_missing(key: &str) {
-    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_value()`/`get_value_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+    warn!(event_id = 3001; "Cannot evaluate targeting rules and % options for setting '{key}' (User Object is missing). You should pass a User Object to the evaluation methods like `get_value()`/`get_value_details()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/");
 }
 
 fn log_attr_missing(key: &str, attr: &str, cond_str: &str) {
-    warn!(event_id = 3003; "Cannot evaluate condition ({cond_str}) for setting '{key}' (the User.{attr} attribute is missing). You should set the User.{attr} attribute in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+    warn!(event_id = 3003; "Cannot evaluate condition ({cond_str}) for setting '{key}' (the User.{attr} attribute is missing). You should set the User.{attr} attribute in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/");
 }
 
 fn log_attr_missing_percentage(key: &str, attr: &str) {
-    warn!(event_id = 3003; "Cannot evaluate % options for setting '{key}' (the User.{attr} attribute is missing). You should set the User.{attr} attribute in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/")
+    warn!(event_id = 3003; "Cannot evaluate % options for setting '{key}' (the User.{attr} attribute is missing). You should set the User.{attr} attribute in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/");
 }
 
 fn log_attr_invalid(key: &str, attr: &str, reason: &str, cond_str: &str) {
-    warn!(event_id = 3004; "Cannot evaluate condition ({cond_str}) for setting '{key}' ({reason}). Please check the User.{attr} attribute and make sure that its value corresponds to the comparison operator.")
+    warn!(event_id = 3004; "Cannot evaluate condition ({cond_str}) for setting '{key}' ({reason}). Please check the User.{attr} attribute and make sure that its value corresponds to the comparison operator.");
 }
 
 fn log_conv(cond: &UserCondition, key: &str, attr_val: &str) {
-    warn!(event_id = 3005; "Evaluation of condition ({cond}) for setting '{key}' may not produce the expected result (the User.{} attribute is not a string value, thus it was automatically converted to the string value '{attr_val}'). Please make sure that using a non-string value was intended.", cond.comp_attr)
+    warn!(event_id = 3005; "Evaluation of condition ({cond}) for setting '{key}' may not produce the expected result (the User.{} attribute is not a string value, thus it was automatically converted to the string value '{attr_val}'). Please make sure that using a non-string value was intended.", cond.comp_attr);
 }

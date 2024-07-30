@@ -1,5 +1,5 @@
 use crate::cache::EmptyConfigCache;
-use crate::constants::SDK_KEY_PROXY_PREFIX;
+use crate::constants::{SDK_KEY_PREFIX, SDK_KEY_PROXY_PREFIX, SDK_KEY_SECTION_LENGTH};
 use crate::errors::{ClientError, ErrorKind};
 use crate::model::enums::DataGovernance;
 use crate::modes::PollingMode;
@@ -70,7 +70,7 @@ impl Debug for Options {
             .field("overrides", &self.overrides)
             .field("polling_mode", &self.polling_mode)
             .field("default_user", &self.default_user)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -101,9 +101,6 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    const SDK_KEY_PREFIX: &'static str = "configcat-sdk-1";
-    const SDK_KEY_SECTION_LENGTH: usize = 22;
-
     pub(crate) fn new(sdk_key: &str) -> Self {
         Self {
             sdk_key: sdk_key.to_owned(),
@@ -296,7 +293,7 @@ impl ClientBuilder {
             ));
         }
         if !self.overrides.is_local()
-            && !self.is_sdk_key_valid(self.sdk_key.as_str(), self.base_url.is_some())
+            && !is_sdk_key_valid(self.sdk_key.as_str(), self.base_url.is_some())
         {
             return Err(ClientError::new(
                 ErrorKind::InvalidSdkKey,
@@ -321,26 +318,23 @@ impl ClientBuilder {
             default_user: self.default_user,
         }
     }
+}
 
-    fn is_sdk_key_valid(&self, sdk_key: &str, is_custom_url: bool) -> bool {
-        if is_custom_url
-            && sdk_key.len() > SDK_KEY_PROXY_PREFIX.len()
-            && sdk_key.starts_with(SDK_KEY_PROXY_PREFIX)
-        {
-            return true;
+fn is_sdk_key_valid(sdk_key: &str, is_custom_url: bool) -> bool {
+    if is_custom_url
+        && sdk_key.len() > SDK_KEY_PROXY_PREFIX.len()
+        && sdk_key.starts_with(SDK_KEY_PROXY_PREFIX)
+    {
+        return true;
+    }
+    let comps: Vec<&str> = sdk_key.split('/').collect();
+    match comps.len() {
+        2 => comps[0].len() == SDK_KEY_SECTION_LENGTH && comps[1].len() == SDK_KEY_SECTION_LENGTH,
+        3 => {
+            comps[0] == SDK_KEY_PREFIX
+                && comps[1].len() == SDK_KEY_SECTION_LENGTH
+                && comps[2].len() == SDK_KEY_SECTION_LENGTH
         }
-        let comps: Vec<&str> = sdk_key.split('/').collect();
-        match comps.len() {
-            2 => {
-                comps[0].len() == Self::SDK_KEY_SECTION_LENGTH
-                    && comps[1].len() == Self::SDK_KEY_SECTION_LENGTH
-            }
-            3 => {
-                comps[0] == Self::SDK_KEY_PREFIX
-                    && comps[1].len() == Self::SDK_KEY_SECTION_LENGTH
-                    && comps[2].len() == Self::SDK_KEY_SECTION_LENGTH
-            }
-            _ => false,
-        }
+        _ => false,
     }
 }

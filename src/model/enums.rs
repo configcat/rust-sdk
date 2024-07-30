@@ -186,42 +186,42 @@ pub enum UserComparator {
 impl Display for UserComparator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            UserComparator::OneOf => f.write_str("IS ONE OF"),
-            UserComparator::NotOneOf => f.write_str("IS NOT ONE OF"),
             UserComparator::Contains => f.write_str("CONTAINS ANY OF"),
             UserComparator::NotContains => f.write_str("NOT CONTAINS ANY OF"),
-            UserComparator::OneOfSemver => f.write_str("IS ONE OF"),
-            UserComparator::NotOneOfSemver => f.write_str("IS NOT ONE OF"),
-            UserComparator::LessSemver => f.write_str("<"),
-            UserComparator::LessEqSemver => f.write_str("<="),
-            UserComparator::GreaterSemver => f.write_str(">"),
-            UserComparator::GreaterEqSemver => f.write_str(">="),
+            UserComparator::OneOfSemver | UserComparator::OneOfHashed | UserComparator::OneOf => {
+                f.write_str("IS ONE OF")
+            }
+            UserComparator::NotOneOfSemver
+            | UserComparator::NotOneOf
+            | UserComparator::NotOneOfHashed => f.write_str("IS NOT ONE OF"),
+            UserComparator::LessSemver | UserComparator::LessNum => f.write_str("<"),
+            UserComparator::LessEqSemver | UserComparator::LessEqNum => f.write_str("<="),
+            UserComparator::GreaterSemver | UserComparator::GreaterNum => f.write_str(">"),
+            UserComparator::GreaterEqSemver | UserComparator::GreaterEqNum => f.write_str(">="),
             UserComparator::EqNum => f.write_str("="),
             UserComparator::NotEqNum => f.write_str("!="),
-            UserComparator::LessNum => f.write_str("<"),
-            UserComparator::LessEqNum => f.write_str("<="),
-            UserComparator::GreaterNum => f.write_str(">"),
-            UserComparator::GreaterEqNum => f.write_str(">="),
-            UserComparator::OneOfHashed => f.write_str("IS ONE OF"),
-            UserComparator::NotOneOfHashed => f.write_str("IS NOT ONE OF"),
             UserComparator::BeforeDateTime => f.write_str("BEFORE"),
             UserComparator::AfterDateTime => f.write_str("AFTER"),
-            UserComparator::EqHashed => f.write_str("EQUALS"),
-            UserComparator::NotEqHashed => f.write_str("NOT EQUALS"),
-            UserComparator::StartsWithAnyOfHashed => f.write_str("STARTS WITH ANY OF"),
-            UserComparator::NotStartsWithAnyOfHashed => f.write_str("NOT STARTS WITH ANY OF"),
-            UserComparator::EndsWithAnyOfHashed => f.write_str("ENDS WITH ANY OF"),
-            UserComparator::NotEndsWithAnyOfHashed => f.write_str("NOT ENDS WITH ANY OF"),
-            UserComparator::ArrayContainsAnyOfHashed => f.write_str("ARRAY CONTAINS ANY OF"),
-            UserComparator::ArrayNotContainsAnyOfHashed => f.write_str("ARRAY NOT CONTAINS ANY OF"),
-            UserComparator::Eq => f.write_str("EQUALS"),
-            UserComparator::NotEq => f.write_str("NOT EQUALS"),
-            UserComparator::StartsWithAnyOf => f.write_str("STARTS WITH ANY OF"),
-            UserComparator::NotStartsWithAnyOf => f.write_str("NOT STARTS WITH ANY OF"),
-            UserComparator::EndsWithAnyOf => f.write_str("ENDS WITH ANY OF"),
-            UserComparator::NotEndsWithAnyOf => f.write_str("NOT ENDS WITH ANY OF"),
-            UserComparator::ArrayContainsAnyOf => f.write_str("ARRAY CONTAINS ANY OF"),
-            UserComparator::ArrayNotContainsAnyOf => f.write_str("ARRAY NOT CONTAINS ANY OF"),
+            UserComparator::EqHashed | UserComparator::Eq => f.write_str("EQUALS"),
+            UserComparator::NotEqHashed | UserComparator::NotEq => f.write_str("NOT EQUALS"),
+            UserComparator::StartsWithAnyOfHashed | UserComparator::StartsWithAnyOf => {
+                f.write_str("STARTS WITH ANY OF")
+            }
+            UserComparator::NotStartsWithAnyOfHashed | UserComparator::NotStartsWithAnyOf => {
+                f.write_str("NOT STARTS WITH ANY OF")
+            }
+            UserComparator::EndsWithAnyOfHashed | UserComparator::EndsWithAnyOf => {
+                f.write_str("ENDS WITH ANY OF")
+            }
+            UserComparator::NotEndsWithAnyOfHashed | UserComparator::NotEndsWithAnyOf => {
+                f.write_str("NOT ENDS WITH ANY OF")
+            }
+            UserComparator::ArrayContainsAnyOfHashed | UserComparator::ArrayContainsAnyOf => {
+                f.write_str("ARRAY CONTAINS ANY OF")
+            }
+            UserComparator::ArrayNotContainsAnyOfHashed | UserComparator::ArrayNotContainsAnyOf => {
+                f.write_str("ARRAY NOT CONTAINS ANY OF")
+            }
         }
     }
 }

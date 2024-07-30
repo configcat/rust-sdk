@@ -37,7 +37,7 @@ impl From<HashMap<&str, Value>> for MapDataSource {
         Self {
             overrides: value
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.into()))
+                .map(|(k, v)| ((*k).to_string(), v.into()))
                 .collect::<HashMap<String, Setting>>(),
         }
     }
@@ -94,7 +94,10 @@ impl<const N: usize> From<[(&str, Value); N]> for MapDataSource {
     /// ```
     fn from(arr: [(&str, Value); N]) -> Self {
         Self {
-            overrides: HashMap::from_iter(arr.iter().map(|(k, v)| (k.to_string(), v.into()))),
+            overrides: arr
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), v.into()))
+                .collect::<HashMap<_, _>>(),
         }
     }
 }

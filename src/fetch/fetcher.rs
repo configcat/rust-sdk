@@ -7,7 +7,10 @@ use reqwest::header::{HeaderMap, ETAG, IF_NONE_MATCH};
 
 use crate::constants::{CONFIG_FILE_NAME, PKG_VERSION, SDK_KEY_PROXY_PREFIX};
 use crate::errors::ClientError;
-use crate::errors::ErrorKind::*;
+use crate::errors::ErrorKind::{
+    HttpClientInitFailure, HttpRequestFailure, HttpRequestTimeout, InvalidHttpResponseContent,
+    InvalidSdkKey, RedirectLoop, UnexpectedHttpResponse,
+};
 use crate::fetch::fetcher::FetchResponse::{Failed, Fetched, NotModified};
 use crate::model::config::{entry_from_json, ConfigEntry};
 use crate::model::enums::RedirectMode;
@@ -90,7 +93,7 @@ impl Fetcher {
                         if redirect == RedirectMode::No {
                             return response;
                         } else if redirect == RedirectMode::Should {
-                            warn!(event_id = 3002; "The `.data_governance()` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard. Read more: https://configcat.com/docs/advanced/data-governance")
+                            warn!(event_id = 3002; "The `.data_governance()` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard. Read more: https://configcat.com/docs/advanced/data-governance");
                         }
                     }
                     _ => return response,
@@ -150,7 +153,7 @@ impl Fetcher {
                     debug!("Fetch was successful: not modified");
                     NotModified
                 }
-                code @ 404 | code @ 403 => {
+                code @ (404 | 403) => {
                     let msg = format!("Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: {code}");
                     error!(event_id = InvalidSdkKey.as_u8(); "{}", msg);
                     Failed(ClientError::new(InvalidSdkKey, msg), false)
@@ -182,7 +185,7 @@ impl Fetcher {
 
     fn set_fetch_url(&self, new_url: String) {
         let mut url = self.fetch_url.lock().unwrap();
-        *url = new_url
+        *url = new_url;
     }
 }
 

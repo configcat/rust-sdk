@@ -18,7 +18,7 @@ pub struct FlagOverrides {
 
 impl FlagOverrides {
     pub fn new(source: Box<dyn OverrideDataSource>, behavior: OverrideBehavior) -> Self {
-        Self { source, behavior }
+        Self { behavior, source }
     }
 
     pub fn behavior(&self) -> &OverrideBehavior {
@@ -43,6 +43,6 @@ impl Debug for FlagOverrides {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FlagOverrides")
             .field("behavior", &self.behavior)
-            .finish()
+            .finish_non_exhaustive()
     }
 }

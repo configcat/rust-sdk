@@ -58,7 +58,7 @@ impl FileDataSource {
                 match simple_result {
                     Ok(simple_config) => {
                         let mut map: HashMap<String, Setting> = HashMap::new();
-                        for (k, value) in simple_config.flags.iter() {
+                        for (k, value) in &simple_config.flags {
                             map.insert(k.clone(), value.into());
                         }
                         Ok(FileDataSource {

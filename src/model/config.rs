@@ -32,7 +32,7 @@ pub struct ConfigEntry {
 impl Default for ConfigEntry {
     fn default() -> Self {
         Self {
-            config: Arc::new(Default::default()),
+            config: Arc::new(Config::default()),
             cache_str: String::default(),
             etag: String::default(),
             fetch_time: DateTime::<Utc>::MIN_UTC,
@@ -64,15 +64,11 @@ impl ConfigEntry {
     }
 
     pub fn set_fetch_time(&mut self, fetch_time: DateTime<Utc>) {
-        let time_index = if let Some(time_index) = self.cache_str.find('\n') {
-            time_index
-        } else {
+        let Some(time_index) = self.cache_str.find('\n') else {
             return;
         };
         let without_time = &self.cache_str[time_index + 1..];
-        let etag_index = if let Some(etag_index) = without_time.find('\n') {
-            etag_index
-        } else {
+        let Some(etag_index) = without_time.find('\n') else {
             return;
         };
         let config_json = &self.cache_str[time_index + 1 + etag_index + 1..];
@@ -108,37 +104,29 @@ pub fn entry_from_json(
 }
 
 pub fn entry_from_cached_json(cached_json: &str) -> Result<ConfigEntry, Error> {
-    let time_index = if let Some(time_index) = cached_json.find('\n') {
-        time_index
-    } else {
+    let Some(time_index) = cached_json.find('\n') else {
         return Err(Error::Parse(
             "Number of values is fewer than expected".to_owned(),
         ));
     };
     let without_time = &cached_json[time_index + 1..];
-    let etag_index = if let Some(etag_index) = without_time.find('\n') {
-        etag_index
-    } else {
+    let Some(etag_index) = without_time.find('\n') else {
         return Err(Error::Parse(
             "Number of values is fewer than expected".to_owned(),
         ));
     };
     let time_string = &cached_json[..time_index];
-    let time = if let Ok(time) = time_string.parse::<i64>() {
-        time
-    } else {
+    let Ok(time) = time_string.parse::<i64>() else {
         return Err(Error::Parse(format!("Invalid fetch time: '{time_string}'")));
     };
-    let fetch_time = if let Some(fetch_time) = DateTime::from_timestamp_millis(time) {
-        fetch_time
-    } else {
+    let Some(fetch_time) = DateTime::from_timestamp_millis(time) else {
         return Err(Error::Parse(format!(
             "Invalid unix seconds value: '{time}'"
         )));
     };
 
     let config_json = &cached_json[time_index + 1 + etag_index + 1..];
-    let etag = &cached_json[time_index + 1..time_index + etag_index + 1];
+    let etag = &cached_json[(time_index + 1)..=(time_index + etag_index)];
     entry_from_json(config_json, etag, fetch_time)
 }
 
@@ -147,7 +135,7 @@ pub fn post_process_config(config: &mut Config) {
         Some(pref) => pref.salt.clone(),
         None => None,
     };
-    for (_, value) in config.settings.iter_mut() {
+    for value in config.settings.values_mut() {
         value.salt.clone_from(&config.salt);
 
         if let Some(rules) = value.targeting_rules.as_mut() {
@@ -158,7 +146,7 @@ pub fn post_process_config(config: &mut Config) {
                         if let Some(segment_condition) = cond.segment_condition.as_mut() {
                             if let Some(segments) = &config.segments {
                                 if let Some(segment) = segments.get(segment_condition.index) {
-                                    segment_condition.segment = Some(segment.clone())
+                                    segment_condition.segment = Some(segment.clone());
                                 }
                             }
                         }
@@ -315,6 +303,7 @@ pub struct UserCondition {
 const STRING_LIST_MAX_LENGTH: usize = 10;
 
 impl Display for UserCondition {
+    #[allow(clippy::cast_possible_truncation)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let res = write!(f, "User.{} {} ", self.comp_attr, self.comparator);
         if self.float_val.is_none() && self.string_val.is_none() && self.string_vec_val.is_none() {

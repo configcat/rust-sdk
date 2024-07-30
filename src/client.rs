@@ -185,26 +185,27 @@ impl Client {
         if eval_user.is_none() {
             eval_user = self.read_def_user();
         }
-        match self.eval_flag(
+        match eval_flag(
             &result.config().settings,
             key,
             &eval_user,
-            Some(default.clone().into()),
+            &Some(default.clone().into()),
         ) {
-            Ok(eval_result) => match T::from_value(&eval_result.value) {
-                Some(val) => EvaluationDetails {
-                    value: val,
-                    key: key.to_owned(),
-                    user: eval_user,
-                    fetch_time: Some(*result.fetch_time()),
-                    ..eval_result.into()
-                },
-                None => {
+            Ok(eval_result) => {
+                if let Some(val) = T::from_value(&eval_result.value) {
+                    EvaluationDetails {
+                        value: val,
+                        key: key.to_owned(),
+                        user: eval_user,
+                        fetch_time: Some(*result.fetch_time()),
+                        ..eval_result.into()
+                    }
+                } else {
                     let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was '{}'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type, type_name::<T>()));
                     error!(event_id = err.kind.as_u8(); "{}", err);
                     EvaluationDetails::from_err(default, key, eval_user, err)
                 }
-            },
+            }
             Err(err) => {
                 error!(event_id = err.kind.as_u8(); "{}", err);
                 EvaluationDetails::from_err(default, key, eval_user, err)
@@ -239,7 +240,7 @@ impl Client {
         if eval_user.is_none() {
             eval_user = self.read_def_user();
         }
-        match self.eval_flag(&result.config().settings, key, &eval_user, None) {
+        match eval_flag(&result.config().settings, key, &eval_user, &None) {
             Ok(eval_result) => EvaluationDetails {
                 value: Some(eval_result.value),
                 key: key.to_owned(),
@@ -314,13 +315,13 @@ impl Client {
         }
         let settings = &config_result.config().settings;
         let mut result = Vec::<EvaluationDetails<Option<Value>>>::with_capacity(settings.len());
-        for (k, _) in settings.iter() {
-            let usr = eval_user.clone();
-            let details = match self.eval_flag(settings, k, &usr, None) {
+        for k in settings.keys() {
+            let usr_clone = eval_user.clone();
+            let details = match eval_flag(settings, k, &usr_clone, &None) {
                 Ok(eval_result) => EvaluationDetails {
                     value: Some(eval_result.value),
                     key: k.to_owned(),
-                    user: usr,
+                    user: usr_clone,
                     fetch_time: Some(*config_result.fetch_time()),
                     variation_id: eval_result.variation_id,
                     matched_targeting_rule: eval_result.rule,
@@ -329,7 +330,7 @@ impl Client {
                 },
                 Err(err) => {
                     error!(event_id = err.kind.as_u8(); "{}", err);
-                    EvaluationDetails::from_err(None, k, usr, err)
+                    EvaluationDetails::from_err(None, k, usr_clone, err)
                 }
             };
             result.push(details);
@@ -440,7 +441,7 @@ impl Client {
     /// }
     /// ```
     pub fn set_default_user(&mut self, user: User) {
-        self.set_def_user(Some(user))
+        self.set_def_user(Some(user));
     }
 
     /// Clears the default user.
@@ -461,10 +462,12 @@ impl Client {
     /// }
     /// ```
     pub fn clear_default_user(&mut self) {
-        self.set_def_user(None)
+        self.set_def_user(None);
     }
 
     /// Asynchronously waits for the initialization of the [`Client`] for a maximum duration specified in `wait_timeout`.
+    ///
+    /// # Errors
     ///
     /// This method fails if the initialization takes more time than the specified `wait_timeout`.
     ///
@@ -488,51 +491,18 @@ impl Client {
         wait_timeout: Duration,
     ) -> Result<ClientCacheState, ClientError> {
         let init = timeout(wait_timeout, self.service.wait_for_init()).await;
-        match init {
-            Ok(state) => Ok(state),
-            Err(_) => {
-                let err = ClientError::new(
-                    ErrorKind::ClientInitTimedOut,
-                    format!(
-                        "Client initialization timed out after {}s.",
-                        wait_timeout.as_secs()
-                    ),
-                );
-                warn!(event_id = err.kind.as_u8(); "{}", err);
-                Err(err)
-            }
-        }
-    }
-
-    fn eval_flag(
-        &self,
-        settings: &HashMap<String, Setting>,
-        key: &str,
-        user: &Option<User>,
-        default: Option<Value>,
-    ) -> Result<EvalResult, ClientError> {
-        if settings.is_empty() {
-            return Err(ClientError::new(ErrorKind::ConfigJsonNotAvailable, format!("Config JSON is not present when evaluating setting '{key}'. Returning the `defaultValue` parameter that you specified in your application: '{}'.", default.to_str())));
-        }
-        match settings.get(key) {
-            None => {
-                let keys = settings
-                    .keys()
-                    .map(|k| format!("'{k}'"))
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                Err(ClientError::new(ErrorKind::SettingKeyMissing, format!("Failed to evaluate setting '{key}' (the key was not found in config JSON). Returning the `defaultValue` parameter that you specified in your application: '{}'. Available keys: [{keys}].", default.to_str())))
-            }
-            Some(setting) => {
-                let eval_result = eval(setting, key, user, settings, &default);
-                match eval_result {
-                    Ok(result) => Ok(result),
-                    Err(err) => Err(ClientError::new(
-                        ErrorKind::EvaluationFailure,
-                        format!("Failed to evaluate setting '{key}' ({err})"),
-                    )),
-                }
-            }
+        if let Ok(state) = init {
+            Ok(state)
+        } else {
+            let err = ClientError::new(
+                ErrorKind::ClientInitTimedOut,
+                format!(
+                    "Client initialization timed out after {}s.",
+                    wait_timeout.as_secs()
+                ),
+            );
+            warn!(event_id = err.kind.as_u8(); "{}", err);
+            Err(err)
         }
     }
 
@@ -543,7 +513,38 @@ impl Client {
 
     fn set_def_user(&self, user: Option<User>) {
         let mut def_user = self.default_user.lock().unwrap();
-        *def_user = user
+        *def_user = user;
+    }
+}
+
+fn eval_flag(
+    settings: &HashMap<String, Setting>,
+    key: &str,
+    user: &Option<User>,
+    default: &Option<Value>,
+) -> Result<EvalResult, ClientError> {
+    if settings.is_empty() {
+        return Err(ClientError::new(ErrorKind::ConfigJsonNotAvailable, format!("Config JSON is not present when evaluating setting '{key}'. Returning the `defaultValue` parameter that you specified in your application: '{}'.", default.to_str())));
+    }
+    match settings.get(key) {
+        None => {
+            let keys = settings
+                .keys()
+                .map(|k| format!("'{k}'"))
+                .collect::<Vec<String>>()
+                .join(", ");
+            Err(ClientError::new(ErrorKind::SettingKeyMissing, format!("Failed to evaluate setting '{key}' (the key was not found in config JSON). Returning the `defaultValue` parameter that you specified in your application: '{}'. Available keys: [{keys}].", default.to_str())))
+        }
+        Some(setting) => {
+            let eval_result = eval(setting, key, user, settings, default);
+            match eval_result {
+                Ok(result) => Ok(result),
+                Err(err) => Err(ClientError::new(
+                    ErrorKind::EvaluationFailure,
+                    format!("Failed to evaluate setting '{key}' ({err})"),
+                )),
+            }
+        }
     }
 }
 
@@ -552,6 +553,6 @@ impl Debug for Client {
         f.debug_struct("Client")
             .field("options", &self.options)
             .field("default_user", &self.default_user)
-            .finish()
+            .finish_non_exhaustive()
     }
 }

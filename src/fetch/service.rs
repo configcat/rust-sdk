@@ -115,7 +115,7 @@ impl ConfigService {
                         if !service.options.offline()
                             && !service.options.overrides().is_local() =>
                     {
-                        service.start_poll(*interval)
+                        service.start_poll(*interval);
                     }
                     _ => service.state.initialized(),
                 }
@@ -138,8 +138,9 @@ impl ConfigService {
         };
         let result = fetch_if_older(&self.state, &self.options, threshold, prefer_cached).await;
         match result {
-            ServiceResult::Ok(config_result) => config_result,
-            ServiceResult::Err(_, config_result) => config_result,
+            ServiceResult::Ok(config_result) | ServiceResult::Err(_, config_result) => {
+                config_result
+            }
         }
     }
 
@@ -166,7 +167,7 @@ impl ConfigService {
 
     pub async fn wait_for_init(&self) -> ClientCacheState {
         if !self.state.initialized.load(Ordering::SeqCst) {
-            _ = self.state.init_wait.acquire().await
+            _ = self.state.init_wait.acquire().await;
         }
         self.determine_cache_state().await
     }
@@ -178,32 +179,29 @@ impl ConfigService {
 
         let mut entry = self.state.cached_entry.lock().await;
 
-        match self.options.polling_mode() {
-            PollingMode::AutoPoll(interval) => {
+        if let PollingMode::AutoPoll(interval) = self.options.polling_mode() {
+            if !entry.is_expired(*interval) {
+                return HasUpToDateFlagData;
+            }
+            if entry.is_empty() {
+                return NoFlagData;
+            }
+            HasCachedFlagDataOnly
+        } else {
+            let from_cache =
+                read_cache(&self.state, &self.options, &entry.cache_str).unwrap_or_default();
+            if !from_cache.is_empty() && *entry != from_cache {
+                *entry = from_cache;
+            }
+            if let PollingMode::LazyLoad(interval) = self.options.polling_mode() {
                 if !entry.is_expired(*interval) {
                     return HasUpToDateFlagData;
                 }
-                if entry.is_empty() {
-                    return NoFlagData;
-                }
-                HasCachedFlagDataOnly
             }
-            _ => {
-                let from_cache =
-                    read_cache(&self.state, &self.options, &entry.cache_str).unwrap_or_default();
-                if !from_cache.is_empty() && *entry != from_cache {
-                    *entry = from_cache;
-                }
-                if let PollingMode::LazyLoad(interval) = self.options.polling_mode() {
-                    if !entry.is_expired(*interval) {
-                        return HasUpToDateFlagData;
-                    }
-                }
-                if entry.is_empty() {
-                    return NoFlagData;
-                }
-                HasCachedFlagDataOnly
+            if entry.is_empty() {
+                return NoFlagData;
             }
+            HasCachedFlagDataOnly
         }
     }
 
@@ -219,7 +217,7 @@ impl ConfigService {
                     _ = int.tick() => {
                         fetch_if_older(&state, &opts, Utc::now() - (interval / 2), false).await;
                     },
-                    _ = token.cancelled() => break
+                    () = token.cancelled() => break
                 }
             }
         });
