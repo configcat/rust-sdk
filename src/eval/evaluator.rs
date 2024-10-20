@@ -186,42 +186,39 @@ fn eval_setting(
                             log.inc_indent();
                         }
                         match rule.percentage_options.as_ref() {
-                            Some(percentage_opts) => match user {
-                                Some(u) => {
-                                    let percentage_result = eval_percentage(
-                                        percentage_opts,
-                                        u,
-                                        key,
-                                        &setting.percentage_attribute,
-                                        log,
-                                    );
-                                    match percentage_result {
-                                        PercentageResult::Success(opt) => {
-                                            if eval_log_enabled!() {
-                                                log.dec_indent();
-                                            }
-                                            return produce_result(
-                                                &opt.served_value,
-                                                &setting.setting_type,
-                                                &opt.variation_id,
-                                                Some(rule.clone()),
-                                                Some(opt.clone()),
-                                            );
+                            Some(percentage_opts) => if let Some(u) = user {
+                                let percentage_result = eval_percentage(
+                                    percentage_opts,
+                                    u,
+                                    key,
+                                    &setting.percentage_attribute,
+                                    log,
+                                );
+                                match percentage_result {
+                                    PercentageResult::Success(opt) => {
+                                        if eval_log_enabled!() {
+                                            log.dec_indent();
                                         }
-                                        PercentageResult::UserAttrMissing(attr) => {
-                                            log_attr_missing_percentage(key, attr.as_str());
-                                        }
-                                        PercentageResult::Fatal(err) => return Err(err),
+                                        return produce_result(
+                                            &opt.served_value,
+                                            &setting.setting_type,
+                                            &opt.variation_id,
+                                            Some(rule.clone()),
+                                            Some(opt.clone()),
+                                        );
                                     }
+                                    PercentageResult::UserAttrMissing(attr) => {
+                                        log_attr_missing_percentage(key, attr.as_str());
+                                    }
+                                    PercentageResult::Fatal(err) => return Err(err),
                                 }
-                                None => {
-                                    if !user_missing_logged {
-                                        user_missing_logged = true;
-                                        log_user_missing(key);
-                                    }
-                                    if eval_log_enabled!() {
-                                        log.new_ln(Some("Skipping % options because the User Object is missing."));
-                                    }
+                            } else {
+                                if !user_missing_logged {
+                                    user_missing_logged = true;
+                                    log_user_missing(key);
+                                }
+                                if eval_log_enabled!() {
+                                    log.new_ln(Some("Skipping % options because the User Object is missing."));
                                 }
                             },
                             None => {
@@ -263,35 +260,32 @@ fn eval_setting(
     }
 
     if let Some(percentage_opts) = setting.percentage_options.as_ref() {
-        match user {
-            Some(u) => {
-                let percentage_result =
-                    eval_percentage(percentage_opts, u, key, &setting.percentage_attribute, log);
-                match percentage_result {
-                    PercentageResult::Success(opt) => {
-                        return produce_result(
-                            &opt.served_value,
-                            &setting.setting_type,
-                            &opt.variation_id,
-                            None,
-                            Some(opt.clone()),
-                        );
-                    }
-                    PercentageResult::UserAttrMissing(attr) => {
-                        log_attr_missing_percentage(key, attr.as_str());
-                    }
-                    PercentageResult::Fatal(err) => return Err(err),
+        if let Some(u) = user {
+            let percentage_result =
+                eval_percentage(percentage_opts, u, key, &setting.percentage_attribute, log);
+            match percentage_result {
+                PercentageResult::Success(opt) => {
+                    return produce_result(
+                        &opt.served_value,
+                        &setting.setting_type,
+                        &opt.variation_id,
+                        None,
+                        Some(opt.clone()),
+                    );
                 }
+                PercentageResult::UserAttrMissing(attr) => {
+                    log_attr_missing_percentage(key, attr.as_str());
+                }
+                PercentageResult::Fatal(err) => return Err(err),
             }
-            None => {
-                if !user_missing_logged {
-                    log_user_missing(key);
-                }
-                if eval_log_enabled!() {
-                    log.new_ln(Some(
-                        "Skipping % options because the User Object is missing.",
-                    ));
-                }
+        } else {
+            if !user_missing_logged {
+                log_user_missing(key);
+            }
+            if eval_log_enabled!() {
+                log.new_ln(Some(
+                    "Skipping % options because the User Object is missing.",
+                ));
             }
         }
     }
