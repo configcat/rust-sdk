@@ -33,7 +33,7 @@ pub struct Fetcher {
 
 impl Fetcher {
     pub fn new(
-        url: String,
+        url: &str,
         is_custom: bool,
         sdk_key: &str,
         mode: &str,
@@ -52,7 +52,7 @@ impl Fetcher {
         match http_client {
             Ok(client) => Ok(Self {
                 sdk_key: sdk_key.to_owned(),
-                fetch_url: Arc::new(Mutex::new(url)),
+                fetch_url: Arc::new(Mutex::new(url.to_owned())),
                 is_custom_url: is_custom,
                 http_client: client,
             }),
@@ -215,7 +215,7 @@ mod fetch_tests {
             .await;
 
         let fetcher = Fetcher::new(
-            server.url(),
+            server.url().as_str(),
             false,
             MOCK_KEY,
             "mode",
@@ -245,8 +245,14 @@ mod fetch_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(server.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            server.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         let response = fetcher.fetch("").await;
         assert!(matches!(response, Fetched(_)));
 
@@ -287,8 +293,14 @@ mod fetch_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(server.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            server.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         let response = fetcher.fetch("").await;
         match response {
             FetchResponse::Failed(err, transient) => {
@@ -333,8 +345,14 @@ mod fetch_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(server.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            server.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         let response = fetcher.fetch("").await;
         match response {
             FetchResponse::Failed(err, transient) => {
@@ -375,8 +393,14 @@ mod data_governance_tests {
             .await;
         let eu_mock = eu.mock("GET", MOCK_PATH).expect(0).create_async().await;
 
-        let fetcher =
-            Fetcher::new(global.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            global.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
 
         g_mock.assert_async().await;
@@ -395,8 +419,14 @@ mod data_governance_tests {
             .await;
         let eu_mock = eu.mock("GET", MOCK_PATH).expect(0).create_async().await;
 
-        let fetcher =
-            Fetcher::new(global.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            global.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
 
         g_mock.assert_async().await;
@@ -415,8 +445,14 @@ mod data_governance_tests {
             .await;
         let eu_mock = eu.mock("GET", MOCK_PATH).expect(0).create_async().await;
 
-        let fetcher =
-            Fetcher::new(global.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            global.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
 
         g_mock.assert_async().await;
@@ -440,8 +476,14 @@ mod data_governance_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(global.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            global.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
 
         g_mock.assert_async().await;
@@ -465,8 +507,14 @@ mod data_governance_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(global.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            global.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
 
         g_mock.assert_async().await;
@@ -491,8 +539,14 @@ mod data_governance_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(global.url(), false, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            global.url().as_str(),
+            false,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
 
         g_mock.assert_async().await;
@@ -518,8 +572,14 @@ mod data_governance_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(custom.url(), true, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            custom.url().as_str(),
+            true,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
         fetcher.fetch("").await;
 
@@ -546,8 +606,14 @@ mod data_governance_tests {
             .create_async()
             .await;
 
-        let fetcher =
-            Fetcher::new(custom.url(), true, MOCK_KEY, "", Duration::from_secs(30)).unwrap();
+        let fetcher = Fetcher::new(
+            custom.url().as_str(),
+            true,
+            MOCK_KEY,
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
         fetcher.fetch("").await;
         fetcher.fetch("").await;
 
@@ -583,7 +649,7 @@ mod data_governance_tests {
             .await;
 
         let fetcher = Fetcher::new(
-            custom.url(),
+            custom.url().as_str(),
             true,
             format!("{SDK_KEY_PROXY_PREFIX}{MOCK_KEY}").as_str(),
             "",

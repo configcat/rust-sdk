@@ -103,9 +103,9 @@ impl Display for ConditionResult {
 pub fn eval(
     setting: &Setting,
     key: &str,
-    user: &Option<User>,
+    user: Option<&User>,
     settings: &HashMap<String, Setting>,
-    default: &Option<Value>,
+    default: Option<&Value>,
 ) -> Result<EvalResult, String> {
     let mut eval_log = EvalLogBuilder::default();
     let mut cycle_tracker = Vec::<String>::default();
@@ -143,7 +143,7 @@ pub fn eval(
 fn eval_setting(
     setting: &Setting,
     key: &str,
-    user: &Option<User>,
+    user: Option<&User>,
     settings: &HashMap<String, Setting>,
     log: &mut EvalLogBuilder,
     cycle_tracker: &mut Vec<String>,
@@ -159,10 +159,10 @@ fn eval_setting(
             if let Some(conditions) = rule.conditions.as_ref() {
                 let result = eval_conditions(
                     conditions,
-                    &rule.served_value,
+                    rule.served_value.as_ref(),
                     key,
                     user,
-                    &setting.salt,
+                    setting.salt.as_ref(),
                     key,
                     log,
                     settings,
@@ -177,7 +177,7 @@ fn eval_setting(
                             return produce_result(
                                 &served_val.value,
                                 &setting.setting_type,
-                                &served_val.variation_id,
+                                served_val.variation_id.as_ref(),
                                 Some(rule.clone()),
                                 None,
                             );
@@ -192,7 +192,7 @@ fn eval_setting(
                                         percentage_opts,
                                         u,
                                         key,
-                                        &setting.percentage_attribute,
+                                        setting.percentage_attribute.as_ref(),
                                         log,
                                     );
                                     match percentage_result {
@@ -203,7 +203,7 @@ fn eval_setting(
                                             return produce_result(
                                                 &opt.served_value,
                                                 &setting.setting_type,
-                                                &opt.variation_id,
+                                                opt.variation_id.as_ref(),
                                                 Some(rule.clone()),
                                                 Some(opt.clone()),
                                             );
@@ -263,14 +263,19 @@ fn eval_setting(
 
     if let Some(percentage_opts) = setting.percentage_options.as_ref() {
         if let Some(u) = user {
-            let percentage_result =
-                eval_percentage(percentage_opts, u, key, &setting.percentage_attribute, log);
+            let percentage_result = eval_percentage(
+                percentage_opts,
+                u,
+                key,
+                setting.percentage_attribute.as_ref(),
+                log,
+            );
             match percentage_result {
                 PercentageResult::Success(opt) => {
                     return produce_result(
                         &opt.served_value,
                         &setting.setting_type,
-                        &opt.variation_id,
+                        opt.variation_id.as_ref(),
                         None,
                         Some(opt.clone()),
                     );
@@ -294,7 +299,7 @@ fn eval_setting(
     produce_result(
         &setting.value,
         &setting.setting_type,
-        &setting.variation_id,
+        setting.variation_id.as_ref(),
         None,
         None,
     )
@@ -303,7 +308,7 @@ fn eval_setting(
 fn produce_result(
     sv: &SettingValue,
     setting_type: &SettingType,
-    variation: &Option<String>,
+    variation: Option<&String>,
     rule: Option<Arc<TargetingRule>>,
     option: Option<Arc<PercentageOption>>,
 ) -> Result<EvalResult, String> {
@@ -312,7 +317,7 @@ fn produce_result(
             value,
             rule,
             option,
-            variation_id: variation.clone(),
+            variation_id: Some(variation.unwrap_or(&String::default()).to_owned()),
             setting_type: setting_type.clone(),
         });
     }
@@ -323,7 +328,7 @@ fn eval_percentage(
     opts: &[Arc<PercentageOption>],
     user: &User,
     key: &str,
-    percentage_attr: &Option<String>,
+    percentage_attr: Option<&String>,
     log: &mut EvalLogBuilder,
 ) -> PercentageResult {
     let attr = if let Some(percentage_attr) = percentage_attr {
@@ -379,10 +384,10 @@ fn eval_percentage(
 
 fn eval_conditions(
     conditions: &[Condition],
-    rule_srv_value: &Option<ServedValue>,
+    rule_srv_value: Option<&ServedValue>,
     key: &str,
-    user: &Option<User>,
-    salt: &Option<String>,
+    user: Option<&User>,
+    salt: Option<&String>,
     ctx_salt: &str,
     log: &mut EvalLogBuilder,
     settings: &HashMap<String, Setting>,
@@ -468,7 +473,7 @@ fn eval_conditions(
 fn eval_prerequisite_cond(
     cond: &PrerequisiteFlagCondition,
     key: &str,
-    user: &Option<User>,
+    user: Option<&User>,
     log: &mut EvalLogBuilder,
     settings: &HashMap<String, Setting>,
     cycle_tracker: &mut Vec<String>,
@@ -538,7 +543,7 @@ fn eval_segment_cond(
     cond: &SegmentCondition,
     key: &str,
     user: &User,
-    salt: &Option<String>,
+    salt: Option<&String>,
     log: &mut EvalLogBuilder,
 ) -> ConditionResult {
     let Some(segment) = cond.segment.as_ref() else {
@@ -615,13 +620,13 @@ fn eval_user_cond(
     cond: &UserCondition,
     key: &str,
     user: &User,
-    salt: &Option<String>,
+    salt: Option<&String>,
     ctx_salt: &str,
 ) -> ConditionResult {
     let Some(user_attr) = user.get(&cond.comp_attr) else {
         return AttrMissing(cond.comp_attr.clone(), format!("{cond}"));
     };
-    return match cond.comparator {
+    match cond.comparator {
         Eq | NotEq | EqHashed | NotEqHashed => {
             let Some(comp_val) = cond.string_val.as_ref() else {
                 return CompValInvalid(None);
@@ -742,14 +747,14 @@ fn eval_user_cond(
             };
             eval_array_contains(comp_val, &user_val, &cond.comparator, salt, ctx_salt)
         }
-    };
+    }
 }
 
 fn eval_text_eq(
     comp_val: &str,
     user_val: String,
     comp: &UserComparator,
-    salt: &Option<String>,
+    salt: Option<&String>,
     ctx_salt: &str,
 ) -> ConditionResult {
     let needs_true = if comp.is_sensitive() {
@@ -771,7 +776,7 @@ fn eval_one_of(
     comp_val: &[String],
     user_val: String,
     comp: &UserComparator,
-    salt: &Option<String>,
+    salt: Option<&String>,
     ctx_salt: &str,
 ) -> ConditionResult {
     let needs_true = if comp.is_sensitive() {
@@ -798,7 +803,7 @@ fn eval_starts_ends_with(
     comp_val: &[String],
     user_val: &str,
     comp: &UserComparator,
-    salt: &Option<String>,
+    salt: Option<&String>,
     ctx_salt: &str,
 ) -> ConditionResult {
     let needs_true = if comp.is_starts_with() {
@@ -937,7 +942,7 @@ fn eval_array_contains(
     comp_val: &[String],
     user_val: &[String],
     comp: &UserComparator,
-    salt: &Option<String>,
+    salt: Option<&String>,
     ctx_salt: &str,
 ) -> ConditionResult {
     let needs_true = if comp.is_sensitive() {

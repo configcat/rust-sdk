@@ -48,7 +48,7 @@ impl EvalLogBuilder {
         &mut self,
         new_line: bool,
         result: &ConditionResult,
-        rule_srv_value: &Option<ServedValue>,
+        rule_srv_value: Option<&ServedValue>,
     ) -> &mut Self {
         let builder = self.inc_indent();
         if new_line {

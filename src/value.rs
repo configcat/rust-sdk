@@ -109,7 +109,7 @@ pub trait OptionalValueDisplay {
     fn to_str(&self) -> String;
 }
 
-impl OptionalValueDisplay for Option<Value> {
+impl OptionalValueDisplay for Option<&Value> {
     fn to_str(&self) -> String {
         match self {
             None => "none".to_owned(),

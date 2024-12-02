@@ -157,7 +157,7 @@ pub fn post_process_config(config: &mut Config) {
     }
 }
 
-pub fn process_overrides(entry: &mut ConfigEntry, overrides: &Option<FlagOverrides>) {
+pub fn process_overrides(entry: &mut ConfigEntry, overrides: Option<&FlagOverrides>) {
     if let Some(ov) = overrides {
         if matches!(ov.behavior(), OverrideBehavior::LocalOverRemote) {
             if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {

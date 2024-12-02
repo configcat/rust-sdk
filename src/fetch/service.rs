@@ -77,14 +77,17 @@ impl ConfigService {
     const EU_CDN_URL: &'static str = "https://cdn-eu.configcat.com";
 
     pub fn new(opts: Arc<Options>) -> Result<Self, ClientError> {
+        let url = if let Some(base_url) = opts.base_url() {
+            base_url.as_str()
+        } else {
+            match *opts.data_governance() {
+                DataGovernance::Global => Self::GLOBAL_CDN_URL,
+                DataGovernance::EU => Self::EU_CDN_URL,
+            }
+        };
         match Fetcher::new(
-            opts.base_url()
-                .clone()
-                .unwrap_or_else(|| match *opts.data_governance() {
-                    DataGovernance::Global => Self::GLOBAL_CDN_URL.to_owned(),
-                    DataGovernance::EU => Self::EU_CDN_URL.to_owned(),
-                }),
-            !opts.base_url().is_none(),
+            url,
+            opts.base_url().is_some(),
             opts.sdk_key(),
             opts.polling_mode().mode_identifier(),
             *opts.http_timeout(),

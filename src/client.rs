@@ -46,7 +46,7 @@ impl Client {
             Ok(service) => Ok(Self {
                 options: Arc::clone(&opts),
                 service,
-                default_user: Arc::new(Mutex::new(opts.default_user().clone())),
+                default_user: Arc::new(Mutex::new(opts.default_user().cloned())),
             }),
             Err(err) => Err(err),
         }
@@ -188,8 +188,8 @@ impl Client {
         match eval_flag(
             &result.config().settings,
             key,
-            &eval_user,
-            &Some(default.clone().into()),
+            eval_user.as_ref(),
+            Some(&default.clone().into()),
         ) {
             Ok(eval_result) => {
                 if let Some(val) = T::from_value(&eval_result.value) {
@@ -240,7 +240,7 @@ impl Client {
         if eval_user.is_none() {
             eval_user = self.read_def_user();
         }
-        match eval_flag(&result.config().settings, key, &eval_user, &None) {
+        match eval_flag(&result.config().settings, key, eval_user.as_ref(), None) {
             Ok(eval_result) => EvaluationDetails {
                 value: Some(eval_result.value),
                 key: key.to_owned(),
@@ -317,7 +317,7 @@ impl Client {
         let mut result = Vec::<EvaluationDetails<Option<Value>>>::with_capacity(settings.len());
         for k in settings.keys() {
             let usr_clone = eval_user.clone();
-            let details = match eval_flag(settings, k, &usr_clone, &None) {
+            let details = match eval_flag(settings, k, usr_clone.as_ref(), None) {
                 Ok(eval_result) => EvaluationDetails {
                     value: Some(eval_result.value),
                     key: k.to_owned(),
@@ -520,8 +520,8 @@ impl Client {
 fn eval_flag(
     settings: &HashMap<String, Setting>,
     key: &str,
-    user: &Option<User>,
-    default: &Option<Value>,
+    user: Option<&User>,
+    default: Option<&Value>,
 ) -> Result<EvalResult, ClientError> {
     if settings.is_empty() {
         return Err(ClientError::new(ErrorKind::ConfigJsonNotAvailable, format!("Config JSON is not present when evaluating setting '{key}'. Returning the `defaultValue` parameter that you specified in your application: '{}'.", default.to_str())));

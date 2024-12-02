@@ -30,8 +30,8 @@ impl Options {
         self.offline
     }
 
-    pub(crate) fn base_url(&self) -> &Option<String> {
-        &self.base_url
+    pub(crate) fn base_url(&self) -> Option<&String> {
+        self.base_url.as_ref()
     }
 
     pub(crate) fn data_governance(&self) -> &DataGovernance {
@@ -50,12 +50,12 @@ impl Options {
         &self.polling_mode
     }
 
-    pub(crate) fn overrides(&self) -> &Option<FlagOverrides> {
-        &self.overrides
+    pub(crate) fn overrides(&self) -> Option<&FlagOverrides> {
+        self.overrides.as_ref()
     }
 
-    pub(crate) fn default_user(&self) -> &Option<User> {
-        &self.default_user
+    pub(crate) fn default_user(&self) -> Option<&User> {
+        self.default_user.as_ref()
     }
 }
 

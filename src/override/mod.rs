@@ -30,12 +30,18 @@ impl FlagOverrides {
     }
 }
 
-impl OptionalOverrides for Option<FlagOverrides> {
+impl OptionalOverrides for Option<&FlagOverrides> {
     fn is_local(&self) -> bool {
         if let Some(ov) = self {
             return matches!(ov.behavior, OverrideBehavior::LocalOnly);
         }
         false
+    }
+}
+
+impl OptionalOverrides for Option<FlagOverrides> {
+    fn is_local(&self) -> bool {
+        self.as_ref().is_local()
     }
 }
 
