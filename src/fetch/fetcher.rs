@@ -664,10 +664,10 @@ mod data_governance_tests {
     }
 
     fn format_body(url: String, redirect_mode: u8) -> String {
-        return "{ \"p\": { \"u\": \"".to_owned()
+        "{ \"p\": { \"u\": \"".to_owned()
             + url.as_str()
             + "\", \"r\": "
             + redirect_mode.to_string().as_str()
-            + ", \"s\": \"test-salt\" }, \"f\": {}, \"s\":[] }";
+            + ", \"s\": \"test-salt\" }, \"f\": {}, \"s\":[] }"
     }
 }
