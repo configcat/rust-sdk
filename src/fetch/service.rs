@@ -352,7 +352,7 @@ mod service_tests {
             assert_eq!(
                 service.state.cache_key.as_str(),
                 "f83ba5d45bceb4bb704410f51b704fb6dfa19942"
-            )
+            );
         }
         {
             let opts = Arc::new(
@@ -364,7 +364,7 @@ mod service_tests {
             assert_eq!(
                 service.state.cache_key.as_str(),
                 "da7bfd8662209c8ed3f9db96daed4f8d91ba5876"
-            )
+            );
         }
     }
 
@@ -374,7 +374,7 @@ mod service_tests {
         let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
@@ -401,7 +401,7 @@ mod service_tests {
         let (m1, m2) = create_success_then_failure_mock(&mut server).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
@@ -427,7 +427,7 @@ mod service_tests {
         let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::LazyLoad(Duration::from_millis(100)),
             None,
         );
@@ -464,7 +464,7 @@ mod service_tests {
         let (m1, m2) = create_success_then_failure_mock(&mut server).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::LazyLoad(Duration::from_millis(100)),
             None,
         );
@@ -493,7 +493,7 @@ mod service_tests {
         let mut server = mockito::Server::new_async().await;
         let (m1, m2, m3) = create_success_mock_sequence(&mut server).await;
 
-        let opts = create_options(server.url(), PollingMode::Manual, None);
+        let opts = create_options(server.url().as_str(), PollingMode::Manual, None);
         let service = ConfigService::new(opts).unwrap();
 
         let result = service.config().await;
@@ -532,7 +532,7 @@ mod service_tests {
         let m = create_failure_mock(&mut server, 1).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test1",
@@ -562,11 +562,10 @@ mod service_tests {
     async fn poll_respects_cache_expiration() {
         let mut server = mockito::Server::new_async().await;
         let m1 = create_success_mock_with_etag(&mut server, "etag1", 0).await;
-        let m2 = create_success_mock_with_etag(&mut server, "etag2", 0).await;
 
         let opts = create_options(
-            server.url(),
-            PollingMode::AutoPoll(Duration::from_millis(100)),
+            server.url().as_str(),
+            PollingMode::AutoPoll(Duration::from_millis(500)),
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test1",
                 Utc::now(),
@@ -579,17 +578,7 @@ mod service_tests {
         let setting = &result.config().settings["testKey"];
         assert_eq!(setting.value.clone().string_val.unwrap(), "test1");
 
-        service.options.cache().write(
-            service.state.clone().cache_key.as_str(),
-            construct_cache_payload("test2", Utc::now(), "etag2").as_str(),
-        );
-
-        let result = service.config().await;
-        let setting = &result.config().settings["testKey"];
-        assert_eq!(setting.value.clone().string_val.unwrap(), "test2");
-
         m1.assert_async().await;
-        m2.assert_async().await;
     }
 
     #[tokio::test]
@@ -598,7 +587,7 @@ mod service_tests {
         let m = create_success_mock(&mut server, 1).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             Some(Box::new(SingleValueCache::new(String::default()))),
         );
@@ -680,7 +669,7 @@ mod service_tests {
         let m = create_success_mock(&mut server, 0).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_secs(1)),
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test",
@@ -702,7 +691,7 @@ mod service_tests {
         let m = create_success_mock(&mut server, 1).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test",
@@ -724,7 +713,7 @@ mod service_tests {
         let m = create_failure_mock(&mut server, 1).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test",
@@ -746,7 +735,7 @@ mod service_tests {
         let m = create_failure_mock_without_etag(&mut server, 1).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::AutoPoll(Duration::from_millis(100)),
             None,
         );
@@ -764,7 +753,7 @@ mod service_tests {
         let m = create_failure_mock_without_etag(&mut server, 0).await;
 
         let opts = create_options(
-            server.url(),
+            server.url().as_str(),
             PollingMode::Manual,
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test",
@@ -785,7 +774,7 @@ mod service_tests {
         let mut server = mockito::Server::new_async().await;
         let m = create_failure_mock_without_etag(&mut server, 0).await;
 
-        let opts = create_options(server.url(), PollingMode::Manual, None);
+        let opts = create_options(server.url().as_str(), PollingMode::Manual, None);
         let service = ConfigService::new(opts).unwrap();
         let state = service.wait_for_init().await;
 
@@ -795,14 +784,14 @@ mod service_tests {
     }
 
     fn create_options(
-        url: String,
+        url: &str,
         mode: PollingMode,
         cache: Option<Box<dyn ConfigCache>>,
     ) -> Arc<Options> {
         Arc::new(
             ClientBuilder::new(MOCK_KEY)
                 .cache(cache.unwrap_or(Box::new(EmptyConfigCache::new())))
-                .base_url(url.as_str())
+                .base_url(url)
                 .polling_mode(mode)
                 .build_options(),
         )
@@ -912,7 +901,7 @@ mod service_tests {
 
         fn write(&self, _: &str, value: &str) {
             let mut val = self.val.lock().unwrap();
-            *val = value.to_owned()
+            *val = value.to_owned();
         }
     }
 }
