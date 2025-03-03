@@ -565,7 +565,7 @@ mod service_tests {
 
         let opts = create_options(
             server.url().as_str(),
-            PollingMode::AutoPoll(Duration::from_millis(100)),
+            PollingMode::AutoPoll(Duration::from_millis(500)),
             Some(Box::new(SingleValueCache::new(construct_cache_payload(
                 "test1",
                 Utc::now(),
