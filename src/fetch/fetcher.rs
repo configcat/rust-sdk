@@ -102,7 +102,7 @@ impl Fetcher {
             }
         }
         let msg = "Redirection loop encountered while trying to fetch config JSON. Please contact us at https://configcat.com/support".to_owned();
-        error!(event_id = RedirectLoop.as_u8(); "{}", msg);
+        error!(event_id = RedirectLoop.as_u8(); "{msg}");
         Failed(ClientError::new(RedirectLoop, msg), true)
     }
 
@@ -137,14 +137,14 @@ impl Fetcher {
                                 Ok(entry) => Fetched(entry),
                                 Err(parse_error) => {
                                     let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {parse_error}");
-                                    error!(event_id = InvalidHttpResponseContent.as_u8(); "{}", msg);
+                                    error!(event_id = InvalidHttpResponseContent.as_u8(); "{msg}");
                                     Failed(ClientError::new(InvalidHttpResponseContent, msg), true)
                                 }
                             }
                         }
                         Err(body_error) => {
                             let msg = format!("Fetching config JSON was successful but the HTTP response content was invalid. {body_error}");
-                            error!(event_id = InvalidHttpResponseContent.as_u8(); "{}", msg);
+                            error!(event_id = InvalidHttpResponseContent.as_u8(); "{msg}");
                             Failed(ClientError::new(InvalidHttpResponseContent, msg), true)
                         }
                     }
@@ -155,23 +155,23 @@ impl Fetcher {
                 }
                 code @ (404 | 403) => {
                     let msg = format!("Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: {code}");
-                    error!(event_id = InvalidSdkKey.as_u8(); "{}", msg);
+                    error!(event_id = InvalidSdkKey.as_u8(); "{msg}");
                     Failed(ClientError::new(InvalidSdkKey, msg), false)
                 }
                 code => {
                     let msg = format!("Unexpected HTTP response was received while trying to fetch config JSON. Status code: {code}");
-                    error!(event_id = UnexpectedHttpResponse.as_u8(); "{}", msg);
+                    error!(event_id = UnexpectedHttpResponse.as_u8(); "{msg}");
                     Failed(ClientError::new(UnexpectedHttpResponse, msg), true)
                 }
             },
             Err(error) => {
                 if error.is_timeout() {
                     let msg = "Request timed out while trying to fetch config JSON.".to_owned();
-                    error!(event_id = HttpRequestTimeout.as_u8(); "{}", msg);
+                    error!(event_id = HttpRequestTimeout.as_u8(); "{msg}");
                     Failed(ClientError::new(HttpRequestTimeout, msg), true)
                 } else {
                     let msg = format!("Unexpected error occurred while trying to fetch config JSON. It is most likely due to a local network issue. Please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP. {error}");
-                    error!(event_id = HttpRequestFailure.as_u8(); "{}", msg);
+                    error!(event_id = HttpRequestFailure.as_u8(); "{msg}");
                     Failed(ClientError::new(HttpRequestFailure, msg), true)
                 }
             }
@@ -257,12 +257,11 @@ mod fetch_tests {
         assert!(matches!(response, Fetched(_)));
 
         let etag;
-        match response {
-            Fetched(entry) => {
-                etag = entry.etag;
-                assert_eq!("etag1", etag)
-            }
-            _ => panic!(),
+        if let Fetched(entry) = response {
+            etag = entry.etag;
+            assert_eq!("etag1", etag);
+        } else {
+            panic!()
         }
 
         let response = fetcher.fetch(etag.as_str()).await;
@@ -302,30 +301,27 @@ mod fetch_tests {
         )
         .unwrap();
         let response = fetcher.fetch("").await;
-        match response {
-            FetchResponse::Failed(err, transient) => {
-                assert!(!transient);
-                assert_eq!(format!("{err}").as_str(), "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 404");
-            }
-            _ => panic!(),
+        if let FetchResponse::Failed(err, transient) = response {
+            assert!(!transient);
+            assert_eq!(format!("{err}").as_str(), "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 404");
+        } else {
+            panic!()
         }
 
         let response = fetcher.fetch("").await;
-        match response {
-            FetchResponse::Failed(err, transient) => {
-                assert!(!transient);
-                assert_eq!(format!("{err}").as_str(), "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 403");
-            }
-            _ => panic!(),
+        if let FetchResponse::Failed(err, transient) = response {
+            assert!(!transient);
+            assert_eq!(format!("{err}").as_str(), "Your SDK Key seems to be wrong. You can find the valid SDK Key at https://app.configcat.com/sdkkey. Status code: 403");
+        } else {
+            panic!()
         }
 
         let response = fetcher.fetch("").await;
-        match response {
-            FetchResponse::Failed(err, transient) => {
-                assert!(transient);
-                assert_eq!(format!("{err}").as_str(), "Unexpected HTTP response was received while trying to fetch config JSON. Status code: 500");
-            }
-            _ => panic!(),
+        if let FetchResponse::Failed(err, transient) = response {
+            assert!(transient);
+            assert_eq!(format!("{err}").as_str(), "Unexpected HTTP response was received while trying to fetch config JSON. Status code: 500");
+        } else {
+            panic!()
         }
     }
 
@@ -354,21 +350,19 @@ mod fetch_tests {
         )
         .unwrap();
         let response = fetcher.fetch("").await;
-        match response {
-            FetchResponse::Failed(err, transient) => {
-                assert!(transient);
-                assert_eq!(format!("{err}").as_str(), "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing an object at line 1 column 8)");
-            }
-            _ => panic!(),
+        if let FetchResponse::Failed(err, transient) = response {
+            assert!(transient);
+            assert_eq!(format!("{err}").as_str(), "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing an object at line 1 column 8)");
+        } else {
+            panic!()
         }
 
         let response = fetcher.fetch("").await;
-        match response {
-            FetchResponse::Failed(err, transient) => {
-                assert!(transient);
-                assert_eq!(format!("{err}").as_str(), "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing a value at line 1 column 0)");
-            }
-            _ => panic!(),
+        if let FetchResponse::Failed(err, transient) = response {
+            assert!(transient);
+            assert_eq!(format!("{err}").as_str(), "Fetching config JSON was successful but the HTTP response content was invalid. JSON parsing failed. (EOF while parsing a value at line 1 column 0)");
+        } else {
+            panic!()
         }
     }
 }
@@ -388,7 +382,7 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(eu.url(), 0))
+            .with_body(format_body(eu.url().as_str(), 0))
             .create_async()
             .await;
         let eu_mock = eu.mock("GET", MOCK_PATH).expect(0).create_async().await;
@@ -414,7 +408,7 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 1))
+            .with_body(format_body(global.url().as_str(), 1))
             .create_async()
             .await;
         let eu_mock = eu.mock("GET", MOCK_PATH).expect(0).create_async().await;
@@ -440,7 +434,7 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 2))
+            .with_body(format_body(global.url().as_str(), 2))
             .create_async()
             .await;
         let eu_mock = eu.mock("GET", MOCK_PATH).expect(0).create_async().await;
@@ -466,13 +460,13 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(eu.url(), 1))
+            .with_body(format_body(eu.url().as_str(), 1))
             .create_async()
             .await;
         let eu_mock = eu
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(eu.url(), 0))
+            .with_body(format_body(eu.url().as_str(), 0))
             .create_async()
             .await;
 
@@ -497,13 +491,13 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(eu.url(), 2))
+            .with_body(format_body(eu.url().as_str(), 2))
             .create_async()
             .await;
         let eu_mock = eu
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(eu.url(), 0))
+            .with_body(format_body(eu.url().as_str(), 0))
             .create_async()
             .await;
 
@@ -528,14 +522,14 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(eu.url(), 1))
+            .with_body(format_body(eu.url().as_str(), 1))
             .expect(2)
             .create_async()
             .await;
         let eu_mock = eu
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 1))
+            .with_body(format_body(global.url().as_str(), 1))
             .create_async()
             .await;
 
@@ -560,14 +554,14 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 0))
+            .with_body(format_body(global.url().as_str(), 0))
             .expect(0)
             .create_async()
             .await;
         let cu_mock = custom
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 1))
+            .with_body(format_body(global.url().as_str(), 1))
             .expect(2)
             .create_async()
             .await;
@@ -594,14 +588,14 @@ mod data_governance_tests {
         let g_mock = global
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 0))
+            .with_body(format_body(global.url().as_str(), 0))
             .expect(2)
             .create_async()
             .await;
         let cu_mock = custom
             .mock("GET", MOCK_PATH)
             .with_status(200)
-            .with_body(format_body(global.url(), 2))
+            .with_body(format_body(global.url().as_str(), 2))
             .expect(1)
             .create_async()
             .await;
@@ -632,7 +626,7 @@ mod data_governance_tests {
                     .as_str(),
             )
             .with_status(200)
-            .with_body(format_body(global.url(), 0))
+            .with_body(format_body(global.url().as_str(), 0))
             .expect(0)
             .create_async()
             .await;
@@ -643,7 +637,7 @@ mod data_governance_tests {
                     .as_str(),
             )
             .with_status(200)
-            .with_body(format_body(global.url(), 2))
+            .with_body(format_body(global.url().as_str(), 2))
             .expect(2)
             .create_async()
             .await;
@@ -663,9 +657,9 @@ mod data_governance_tests {
         cu_mock.assert_async().await;
     }
 
-    fn format_body(url: String, redirect_mode: u8) -> String {
+    fn format_body(url: &str, redirect_mode: u8) -> String {
         "{ \"p\": { \"u\": \"".to_owned()
-            + url.as_str()
+            + url
             + "\", \"r\": "
             + redirect_mode.to_string().as_str()
             + ", \"s\": \"test-salt\" }, \"f\": {}, \"s\":[] }"
