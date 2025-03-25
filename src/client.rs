@@ -118,7 +118,7 @@ impl Client {
                 ErrorKind::OfflineClient,
                 "Client is in offline mode, it cannot initiate HTTP calls.".to_owned(),
             );
-            warn!(event_id = err.kind.as_u8(); "{}", err);
+            warn!(event_id = err.kind.as_u8(); "{err}");
             return Err(err);
         }
         if self.options.overrides().is_local() {
@@ -126,7 +126,7 @@ impl Client {
                 ErrorKind::LocalOnlyClient,
                 "Client has local-only overrides, it cannot initiate HTTP calls.".to_owned(),
             );
-            warn!(event_id = err.kind.as_u8(); "{}", err);
+            warn!(event_id = err.kind.as_u8(); "{err}");
             return Err(err);
         }
         self.service.refresh().await
@@ -202,12 +202,12 @@ impl Client {
                     }
                 } else {
                     let err = ClientError::new(ErrorKind::SettingValueTypeMismatch, format!("The type of a setting must match the requested type. Setting's type was '{}' but the requested type was '{}'. Learn more: https://configcat.com/docs/sdk-reference/rust/#setting-type-mapping", eval_result.setting_type, type_name::<T>()));
-                    error!(event_id = err.kind.as_u8(); "{}", err);
+                    error!(event_id = err.kind.as_u8(); "{err}");
                     EvaluationDetails::from_err(default, key, eval_user, err)
                 }
             }
             Err(err) => {
-                error!(event_id = err.kind.as_u8(); "{}", err);
+                error!(event_id = err.kind.as_u8(); "{err}");
                 EvaluationDetails::from_err(default, key, eval_user, err)
             }
         }
@@ -253,7 +253,7 @@ impl Client {
                 error: None,
             },
             Err(err) => {
-                error!(event_id = err.kind.as_u8(); "{}", err);
+                error!(event_id = err.kind.as_u8(); "{err}");
                 EvaluationDetails::from_err(None, key, eval_user, err)
             }
         }
@@ -329,7 +329,7 @@ impl Client {
                     ..EvaluationDetails::default()
                 },
                 Err(err) => {
-                    error!(event_id = err.kind.as_u8(); "{}", err);
+                    error!(event_id = err.kind.as_u8(); "{err}");
                     EvaluationDetails::from_err(None, k, usr_clone, err)
                 }
             };
@@ -501,7 +501,7 @@ impl Client {
                     wait_timeout.as_secs()
                 ),
             );
-            warn!(event_id = err.kind.as_u8(); "{}", err);
+            warn!(event_id = err.kind.as_u8(); "{err}");
             Err(err)
         }
     }
