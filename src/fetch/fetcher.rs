@@ -76,7 +76,7 @@ impl Fetcher {
                             .is_some_and(|pref_url| pref_url == fetch_url)
                         {
                             return response;
-                        };
+                        }
 
                         let redirect = pref.redirect.clone().unwrap_or(RedirectMode::No);
                         if self.is_custom_url
