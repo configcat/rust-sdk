@@ -222,10 +222,7 @@ impl UserValue {
                     "Infinity" | "+Infinity" => Some(f64::INFINITY),
                     "-Infinity" => Some(f64::NEG_INFINITY),
                     "NaN" => Some(f64::NAN),
-                    _ => match trimmed.replace(',', ".").parse() {
-                        Ok(num) => Some(num),
-                        Err(_) => None,
-                    },
+                    _ => trimmed.replace(',', ".").parse().ok(),
                 }
             }
             UserValue::Int(val) => Some(*val as f64),
@@ -246,10 +243,7 @@ impl UserValue {
     pub(crate) fn as_semver(&self) -> Option<Version> {
         match self {
             UserValue::SemVer(val) => Some(val.clone()),
-            UserValue::String(val) => match utils::parse_semver(val) {
-                Ok(version) => Some(version),
-                Err(_) => None,
-            },
+            UserValue::String(val) => utils::parse_semver(val).ok(),
             _ => None,
         }
     }
@@ -259,10 +253,7 @@ impl UserValue {
             UserValue::StringVec(val) => Some(val.clone()),
             UserValue::String(val) => {
                 let result = serde_json::from_str::<Vec<String>>(val);
-                match result {
-                    Ok(vec) => Some(vec),
-                    Err(_) => None,
-                }
+                result.ok()
             }
             _ => None,
         }

@@ -233,22 +233,19 @@ fn eval_setting(
                             log.new_ln(Some(RULE_IGNORED_MSG)).dec_indent();
                         }
                     }
-                    Success(false) => continue,
+                    Success(false) => {}
                     Fatal(err) => return Err(err),
                     NoUser => {
                         if !user_missing_logged {
                             user_missing_logged = true;
                             log_user_missing(key);
                         }
-                        continue;
                     }
                     AttrMissing(attr, cond_str) => {
                         log_attr_missing(key, attr.as_str(), cond_str.as_str());
-                        continue;
                     }
                     AttrInvalid(reason, attr, cond_str) => {
                         log_attr_invalid(key, attr.as_str(), reason.as_str(), cond_str.as_str());
-                        continue;
                     }
                     CompValInvalid(error) => {
                         return match error {

@@ -96,7 +96,7 @@ pub fn entry_from_json(
             };
             if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
                 post_process_config(conf_mut);
-            };
+            }
             Ok(entry)
         }
         Err(err) => Err(Error::Parse(err.to_string())),
@@ -162,14 +162,14 @@ pub fn process_overrides(entry: &mut ConfigEntry, overrides: Option<&FlagOverrid
         if matches!(ov.behavior(), OverrideBehavior::LocalOverRemote) {
             if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
                 conf_mut.settings.extend(ov.source().settings().clone());
-            };
+            }
         }
         if matches!(ov.behavior(), OverrideBehavior::RemoteOverLocal) {
             if let Some(conf_mut) = Arc::get_mut(&mut entry.config) {
                 let mut local = ov.source().settings().clone();
                 local.extend(conf_mut.settings.clone());
                 conf_mut.settings = local;
-            };
+            }
         }
     }
 }
