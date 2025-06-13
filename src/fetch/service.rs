@@ -280,7 +280,7 @@ async fn fetch_if_older(
 
     // When an unblocked caller reaches this, we most likely have the latest
     // entry set by the fetching caller. If we didn't, then the entry might have
-    // been overwritten by one of the blocked callers from the cache right after
+    // been overwritten from the cache by one of the blocked callers right after
     // the fetching caller saved it. In this case, we'll do another fetch.
     let entry = state.cached_entry.load();
     if entry.fetch_time > threshold {
