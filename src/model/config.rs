@@ -63,17 +63,18 @@ impl ConfigEntry {
         Utc::now() - duration > self.fetch_time
     }
 
-    pub fn set_fetch_time(&mut self, fetch_time: DateTime<Utc>) {
-        let Some(time_index) = self.cache_str.find('\n') else {
-            return;
-        };
+    pub fn with_fetch_time(&self, fetch_time: DateTime<Utc>) -> Option<ConfigEntry> {
+        let time_index = self.cache_str.find('\n')?;
         let without_time = &self.cache_str[time_index + 1..];
-        let Some(etag_index) = without_time.find('\n') else {
-            return;
-        };
+        let etag_index = without_time.find('\n')?;
         let config_json = &self.cache_str[time_index + 1 + etag_index + 1..];
-        self.fetch_time = fetch_time;
-        self.cache_str = generate_cache_str(fetch_time, &self.etag, config_json);
+        let cache_str = generate_cache_str(fetch_time, &self.etag, config_json);
+        Some(ConfigEntry {
+            config: self.config.clone(),
+            cache_str,
+            etag: self.etag.clone(),
+            fetch_time,
+        })
     }
 }
 
@@ -539,14 +540,14 @@ mod model_tests {
     #[test]
     fn set_fetch_time() {
         let payload = format!("1686756435844\ntest-etag\n{CONFIG_JSON}");
-        let mut entry = entry_from_cached_json(payload.as_str()).unwrap();
+        let entry = entry_from_cached_json(payload.as_str()).unwrap();
         let updated_time = Utc::now();
-        entry.set_fetch_time(updated_time);
-        assert_eq!(entry.config.settings.len(), 1);
-        assert_eq!(entry.fetch_time, updated_time);
-        assert_eq!(entry.etag, "test-etag");
+        let updated = entry.with_fetch_time(updated_time).unwrap();
+        assert_eq!(updated.config.settings.len(), 1);
+        assert_eq!(updated.fetch_time, updated_time);
+        assert_eq!(updated.etag, "test-etag");
         assert_eq!(
-            entry.cache_str,
+            updated.cache_str,
             format!(
                 "{}\ntest-etag\n{CONFIG_JSON}",
                 updated_time.timestamp_millis()

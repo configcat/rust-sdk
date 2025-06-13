@@ -1,10 +1,10 @@
+use arc_swap::ArcSwap;
+use chrono::{DateTime, Utc};
+use log::warn;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Once;
 use std::time::Duration;
-
-use chrono::{DateTime, Utc};
-use log::warn;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
@@ -48,12 +48,13 @@ impl ConfigResult {
 
 struct ServiceState {
     fetcher: Fetcher,
-    cached_entry: Arc<tokio::sync::Mutex<ConfigEntry>>,
+    cached_entry: ArcSwap<ConfigEntry>,
     cache_key: String,
     offline: AtomicBool,
     initialized: AtomicBool,
     init: Once,
     init_wait: Semaphore,
+    fetch_wait: Semaphore,
 }
 
 impl ServiceState {
@@ -107,7 +108,8 @@ impl ConfigService {
                         initialized: AtomicBool::new(false),
                         init: Once::new(),
                         init_wait: Semaphore::new(0),
-                        cached_entry: Arc::new(tokio::sync::Mutex::new(ConfigEntry::default())),
+                        fetch_wait: Semaphore::new(1),
+                        cached_entry: ArcSwap::new(Arc::new(ConfigEntry::default())),
                     }),
                     options: opts,
                     cancellation_token: CancellationToken::new(),
@@ -172,18 +174,18 @@ impl ConfigService {
         if !self.state.initialized.load(Ordering::SeqCst) {
             _ = self.state.init_wait.acquire().await;
         }
-        self.determine_cache_state().await
+        self.determine_cache_state()
     }
 
-    async fn determine_cache_state(&self) -> ClientCacheState {
+    fn determine_cache_state(&self) -> ClientCacheState {
         if self.options.overrides().is_local() {
             return HasLocalOverrideFlagDataOnly;
         }
 
-        let mut entry = self.state.cached_entry.lock().await;
+        let entry = self.state.cached_entry.load();
 
         if let PollingMode::AutoPoll(interval) = self.options.polling_mode() {
-            if !entry.is_expired(*interval) {
+            if !self.state.cached_entry.load().is_expired(*interval) {
                 return HasUpToDateFlagData;
             }
             if entry.is_empty() {
@@ -193,9 +195,11 @@ impl ConfigService {
         } else {
             let from_cache =
                 read_cache(&self.state, &self.options, &entry.cache_str).unwrap_or_default();
-            if !from_cache.is_empty() && *entry != from_cache {
-                *entry = from_cache;
+            if !from_cache.is_empty() && **entry != from_cache {
+                self.state.cached_entry.store(Arc::new(from_cache));
             }
+            // Reload entry as we might have an updated value.
+            let entry = self.state.cached_entry.load();
             if let PollingMode::LazyLoad(interval) = self.options.polling_mode() {
                 if !entry.is_expired(*interval) {
                     return HasUpToDateFlagData;
@@ -239,33 +243,48 @@ async fn fetch_if_older(
     threshold: DateTime<Utc>,
     prefer_cached: bool,
 ) -> ServiceResult {
-    let mut entry = state.cached_entry.lock().await;
     if let Some(ov) = options.overrides() {
         if matches!(ov.behavior(), OverrideBehavior::LocalOnly) {
-            if entry.is_empty() {
-                *entry = ConfigEntry {
+            if state.cached_entry.load().is_empty() {
+                state.cached_entry.store(Arc::new(ConfigEntry {
                     config: Arc::new(Config {
                         settings: ov.source().settings().clone(),
                         ..Config::default()
                     }),
                     ..ConfigEntry::local()
-                };
+                }));
             }
             return ServiceResult::Ok(ConfigResult::new(
-                entry.config.clone(),
+                state.cached_entry.load().config.clone(),
                 DateTime::<Utc>::MIN_UTC,
             ));
         }
     }
-
+    let entry = state.cached_entry.load();
     let from_cache = read_cache(state, options, &entry.cache_str).unwrap_or_default();
 
-    if !from_cache.is_empty() && *entry != from_cache {
-        *entry = from_cache;
+    if !from_cache.is_empty() && **entry != from_cache {
+        state.cached_entry.store(Arc::new(from_cache));
     }
 
+    // Reload entry as we might have an updated value.
+    let entry = state.cached_entry.load();
     if entry.fetch_time > threshold || state.offline.load(Ordering::SeqCst) || prefer_cached {
         state.initialized();
+        return ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time));
+    }
+
+    // We allow only 1 caller to initiate fetch.
+    // Unwrapping is safe as we won't close the semaphore.
+    let permit = state.fetch_wait.acquire().await.unwrap();
+
+    // When an unblocked caller reaches this, we most likely have the latest
+    // entry set by the fetching caller. If we didn't, then the entry might have
+    // been overwritten by one of the blocked callers from the cache right after
+    // the fetching caller saved it. In this case, we'll do another fetch.
+    let entry = state.cached_entry.load();
+    if entry.fetch_time > threshold {
+        drop(permit);
         return ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time));
     }
 
@@ -274,26 +293,50 @@ async fn fetch_if_older(
     match response {
         FetchResponse::Fetched(mut new_entry) => {
             process_overrides(&mut new_entry, options.overrides());
-            *entry = new_entry;
+            let arc_new_entry = Arc::new(new_entry);
+            state.cached_entry.store(arc_new_entry.clone());
             options
                 .cache()
-                .write(&state.cache_key, entry.cache_str.as_str());
-            ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
+                .write(&state.cache_key, arc_new_entry.cache_str.as_str());
+            drop(permit);
+            ServiceResult::Ok(ConfigResult::new(
+                arc_new_entry.config.clone(),
+                arc_new_entry.fetch_time,
+            ))
         }
         FetchResponse::NotModified => {
-            entry.set_fetch_time(Utc::now());
-            options
-                .cache()
-                .write(&state.cache_key, entry.cache_str.as_str());
-            ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
+            if let Some(new_entry) = entry.with_fetch_time(Utc::now()) {
+                options
+                    .cache()
+                    .write(&state.cache_key, new_entry.cache_str.as_str());
+                let arc_new_entry = Arc::new(new_entry);
+                state.cached_entry.store(arc_new_entry.clone());
+                drop(permit);
+                ServiceResult::Ok(ConfigResult::new(
+                    arc_new_entry.config.clone(),
+                    arc_new_entry.fetch_time,
+                ))
+            } else {
+                drop(permit);
+                ServiceResult::Ok(ConfigResult::new(entry.config.clone(), entry.fetch_time))
+            }
         }
         FetchResponse::Failed(err, transient) => {
             if !transient && !entry.is_empty() {
-                entry.set_fetch_time(Utc::now());
-                options
-                    .cache()
-                    .write(&state.cache_key, entry.cache_str.as_str());
+                if let Some(new_entry) = entry.with_fetch_time(Utc::now()) {
+                    options
+                        .cache()
+                        .write(&state.cache_key, new_entry.cache_str.as_str());
+                    let arc_new_entry = Arc::new(new_entry);
+                    state.cached_entry.store(arc_new_entry.clone());
+                    drop(permit);
+                    return ServiceResult::Err(
+                        err,
+                        ConfigResult::new(arc_new_entry.config.clone(), arc_new_entry.fetch_time),
+                    );
+                }
             }
+            drop(permit);
             ServiceResult::Err(
                 err,
                 ConfigResult::new(entry.config.clone(), entry.fetch_time),
