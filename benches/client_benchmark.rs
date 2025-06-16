@@ -36,20 +36,25 @@ fn get_value_bench(c: &mut Criterion) {
             .build()
             .unwrap(),
     );
-    c.bench_function("get_value", |b| {
-        b.to_async(Runtime::new().unwrap()).iter(|| async {
-            let mut handles = Vec::new();
-            for _ in 0..200 {
-                let cl = client.clone();
-                handles.push(tokio::spawn(async move {
-                    cl.get_value("testKey", false, None).await;
-                }));
-            }
-            for handle in handles {
-                handle.await.unwrap();
-            }
+    let samples = [100, 1000, 10000, 100000];
+
+    for i in samples.iter() {
+        let sample_size = *i;
+        c.bench_function(format!("get_value {}", sample_size).as_str(), |b| {
+            b.to_async(Runtime::new().unwrap()).iter(|| async {
+                let mut handles = Vec::with_capacity(sample_size);
+                for _ in 0..sample_size {
+                    let cl = client.clone();
+                    handles.push(tokio::spawn(async move {
+                        cl.get_value("testKey", false, None).await
+                    }));
+                }
+                for handle in handles {
+                    handle.await.unwrap();
+                }
+            });
         });
-    });
+    }
 }
 
 fn construct_cache_payload(val: bool, time: DateTime<Utc>, etag: &str) -> String {
