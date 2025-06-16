@@ -29,7 +29,7 @@ fn get_value_bench(c: &mut Criterion) {
             // We benchmark on a cache to bypass the first HTTP request which
             // heavily influences the measurements.
             .cache(Box::new(SingleValueCache::new(construct_cache_payload(
-                "test",
+                true,
                 Utc::now(),
                 "tag",
             ))))
@@ -42,7 +42,8 @@ fn get_value_bench(c: &mut Criterion) {
             for _ in 0..200 {
                 let cl = client.clone();
                 handles.push(tokio::spawn(async move {
-                    cl.get_value("testKey", false, None).await
+                    let v = cl.get_value("testKey", false, None).await;
+                    println!("{v}")
                 }));
             }
             for handle in handles {
@@ -52,12 +53,12 @@ fn get_value_bench(c: &mut Criterion) {
     });
 }
 
-fn construct_cache_payload(val: &str, time: DateTime<Utc>, etag: &str) -> String {
+fn construct_cache_payload(val: bool, time: DateTime<Utc>, etag: &str) -> String {
     time.timestamp_millis().to_string() + "\n" + etag + "\n" + &construct_json_payload(val)
 }
 
-fn construct_json_payload(val: &str) -> String {
-    format!(r#"{{"f": {{"testKey":{{"t":1,"v":{{"s": "{val}"}}}}}}, "s": []}}"#)
+fn construct_json_payload(val: bool) -> String {
+    format!(r#"{{"f": {{"testKey":{{"t":0,"v":{{"b": {val}}}}}}}, "s": []}}"#)
 }
 
 criterion_group!(benches, get_value_bench);
