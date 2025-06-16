@@ -30,4 +30,9 @@ arc-swap = "1.7.1"
 mockito = "1.2.0"
 serde_yaml = "0.9.33"
 tokio = { version = "1.17.0", features = ["rt-multi-thread"] }
-rand = "0.8.5"
+rand = "0.9.1"
+criterion = { version = "0.6.0", features = ["async_tokio"] }
+
+[[bench]]
+name = "client_benchmark"
+harness = false

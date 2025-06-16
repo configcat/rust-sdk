@@ -1,6 +1,6 @@
 use log::kv::Key;
 use log::{set_max_level, Level, Log, Metadata, Record};
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use std::cell::RefCell;
 
 pub fn produce_mock_path() -> (String, String) {
@@ -17,7 +17,7 @@ pub fn construct_bool_json_payload(key: &str, val: bool) -> String {
 }
 
 fn rand_str(len: usize) -> String {
-    Alphanumeric.sample_string(&mut rand::thread_rng(), len)
+    Alphanumeric.sample_string(&mut rand::rng(), len)
 }
 
 pub struct PrintLog {}
