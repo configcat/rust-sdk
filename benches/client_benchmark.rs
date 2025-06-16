@@ -42,8 +42,7 @@ fn get_value_bench(c: &mut Criterion) {
             for _ in 0..200 {
                 let cl = client.clone();
                 handles.push(tokio::spawn(async move {
-                    let v = cl.get_value("testKey", false, None).await;
-                    println!("{v}")
+                    cl.get_value("testKey", false, None).await;
                 }));
             }
             for handle in handles {
