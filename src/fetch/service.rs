@@ -37,7 +37,7 @@ impl ConfigResult {
         Self { config, fetch_time }
     }
 
-    pub fn config(&self) -> &Arc<Config> {
+    pub fn config(&self) -> &Config {
         &self.config
     }
 
@@ -238,8 +238,8 @@ impl Drop for ConfigService {
 }
 
 async fn fetch_if_older(
-    state: &Arc<ServiceState>,
-    options: &Arc<Options>,
+    state: &ServiceState,
+    options: &Options,
     threshold: DateTime<Utc>,
     prefer_cached: bool,
 ) -> ServiceResult {
@@ -346,8 +346,8 @@ async fn fetch_if_older(
 }
 
 fn read_cache(
-    state: &Arc<ServiceState>,
-    options: &Arc<Options>,
+    state: &ServiceState,
+    options: &Options,
     from_memory_str: &String,
 ) -> Option<ConfigEntry> {
     let from_cache_str = options.cache().read(&state.cache_key).unwrap_or_default();
