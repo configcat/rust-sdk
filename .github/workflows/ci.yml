@@ -1,7 +1,7 @@
 name: Rust SDK CI
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 8 * * 1'
   push:
     branches: [ main ]
     paths-ignore:

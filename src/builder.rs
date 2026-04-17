@@ -310,7 +310,7 @@ impl ClientBuilder {
             cache: self.cache.unwrap_or(Box::new(EmptyConfigCache::new())),
             polling_mode: self
                 .polling_mode
-                .unwrap_or(PollingMode::AutoPoll(Duration::from_secs(60))),
+                .unwrap_or(PollingMode::AutoPoll(Duration::from_mins(1))),
             base_url: self.base_url,
             data_governance: self.data_governance.unwrap_or(DataGovernance::Global),
             http_timeout: self.http_timeout.unwrap_or(Duration::from_secs(30)),
