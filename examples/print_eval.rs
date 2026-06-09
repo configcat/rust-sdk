@@ -49,7 +49,10 @@ impl Log for PrintLog {
             Level::Debug => "DEBUG",
             Level::Trace => "TRACE",
         };
-        let event_id = record.key_values().get(Key::from_str_static("event_id")).unwrap();
+        let event_id = record
+            .key_values()
+            .get(Key::from_str_static("event_id"))
+            .unwrap();
         println!("{level} [{event_id}] {}", record.args());
     }
 
