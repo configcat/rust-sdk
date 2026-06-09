@@ -66,7 +66,7 @@ impl Log for RecordingLogger {
             Level::Debug => "DEBUG",
             Level::Trace => "TRACE",
         };
-        let event_id = record.key_values().get(Key::from("event_id")).unwrap();
+        let event_id = record.key_values().get(Key::from_str_static("event_id")).unwrap();
         Self::LOGS.with_borrow_mut(|l| l.push_str(format!("{level} [{}] {}\n", event_id.to_i64().unwrap(), record.args()).as_str()));
     }
 
