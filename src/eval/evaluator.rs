@@ -958,10 +958,11 @@ fn eval_array_contains(
                     return Success(needs_true);
                 }
             }
-        }
-        for comp_item in comp_val {
-            if user_item == comp_item {
-                return Success(needs_true);
+        } else {
+            for comp_item in comp_val {
+                if user_item == comp_item {
+                    return Success(needs_true);
+                }
             }
         }
     }
